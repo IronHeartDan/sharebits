@@ -12,7 +12,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool initialState = true;
-  bool inCall = false;
+  bool inCall = true;
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
 
   List<MediaDeviceInfo>? _mediaDevicesList;
@@ -20,7 +20,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int currentCam = 0;
 
-  int buttonsState = 1;
+  int buttonsState = 0;
   double xPosition = 0;
   double yPosition = 0;
 
@@ -52,14 +52,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> hideInTime() async {
-    await Future.delayed(const Duration(seconds: 2), () {
-      setState(() {
-        buttonsState = 0;
-      });
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     var size = MediaQuery.of(context).size;
@@ -71,14 +63,12 @@ class _HomeScreenState extends State<HomeScreen> {
         initialState = false;
       });
     }
-    if (buttonsState == 1) {
-      hideInTime();
-    }
+
     return Scaffold(
       body: Stack(
         children: [
           Positioned(
-              child: GestureDetector(
+              child: InkWell(
             onTap: inCall
                 ? () {
                     setState(() {
@@ -187,18 +177,25 @@ class _HomeScreenState extends State<HomeScreen> {
             heroTag: "HERO_FAB",
             backgroundColor: inCall ? Colors.red : null,
             onPressed: inCall
-                ? null
+                ? () {
+                    setState(() {
+                      inCall = false;
+                    });
+                  }
                 : () {
-                    Scaffold.of(context).showBottomSheet(
-                      (context) {
-                        return const ExplorerScreen();
-                      },
-                      clipBehavior: Clip.hardEdge,
-                      shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(20),
-                              topRight: Radius.circular(20))),
-                    );
+                    showModalBottomSheet(
+                        constraints: BoxConstraints(
+                          maxHeight: size.height - statusBarHeight,
+                        ),
+                        shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(20))),
+                        clipBehavior: Clip.hardEdge,
+                        isScrollControlled: true,
+                        context: context,
+                        builder: (context) {
+                          return const ExplorerScreen();
+                        });
                   },
             child: inCall ? const Icon(Icons.call_end) : const Icon(Icons.call),
           );

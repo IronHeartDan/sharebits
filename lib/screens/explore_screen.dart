@@ -71,12 +71,14 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
               physics:
                   const ScrollPhysics(parent: NeverScrollableScrollPhysics()),
               children: [
-                ListView.builder(itemBuilder: (context, index) {
-                  return ListTile(
-                    leading: const Icon(Icons.account_circle_rounded),
-                    title: Text(index.toString()),
-                  );
-                }),
+                ListView.builder(
+                    itemCount: 50,
+                    itemBuilder: (context, index) {
+                      return ListTile(
+                        leading: const Icon(Icons.account_circle_rounded),
+                        title: Text(index.toString()),
+                      );
+                    }),
                 const Center(
                   child: Icon(Icons.list),
                 )

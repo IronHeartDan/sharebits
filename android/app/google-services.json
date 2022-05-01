@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "55575284008",
+    "project_id": "sharebits-e701b",
+    "storage_bucket": "sharebits-e701b.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:55575284008:android:fff9a373a85cd03ab3e81d",
+        "android_client_info": {
+          "package_name": "com.zdimension.sharebits"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "55575284008-4hs0kg2ktpfvhtft2bderucon419gbct.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC78xXb-5r206NTWxfRcli0zr0b7JlkrKM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "55575284008-4hs0kg2ktpfvhtft2bderucon419gbct.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

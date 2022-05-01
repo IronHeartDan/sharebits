@@ -1,9 +1,28 @@
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:sharebits/screens/explore_screen.dart';
+
+Future<void> saveTokenToDatabase(String token) async {
+  String phone = FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3);
+
+  var fireStore = FirebaseFirestore.instance;
+  var check = await fireStore.collection("users").doc(phone).get();
+  if (check.exists) {
+    await fireStore.collection('users').doc(phone).update({
+      'tokens': FieldValue.arrayUnion([token]),
+    });
+  } else {
+    await fireStore.collection('users').doc(phone).set({
+      'tokens': FieldValue.arrayUnion([token]),
+    });
+  }
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -15,7 +34,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool initialState = true;
   bool isDragging = false;
-  bool inCall = true;
+  bool inCall = false;
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
 
   List<MediaDeviceInfo>? _mediaDevicesList;
@@ -27,10 +46,28 @@ class _HomeScreenState extends State<HomeScreen> {
   double xPosition = 0;
   double yPosition = 0;
 
+  Future<void> setupToken() async {
+    // Get the token each time the application loads
+    String? token = await FirebaseMessaging.instance.getToken();
+
+    // Save the initial token to the database
+    if (token != null) {
+      await saveTokenToDatabase(token);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text("Something Went Wrong Please Restart The Application")));
+    }
+
+    // Any time the token refreshes, store this in the database too.
+    FirebaseMessaging.instance.onTokenRefresh.listen(saveTokenToDatabase);
+  }
+
   @override
   void initState() {
     super.initState();
-    initRenderer();
+    setupToken();
+    // initRenderer();
   }
 
   void initRenderer() async {

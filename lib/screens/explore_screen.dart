@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:sharebits/utils/custom_search.dart';
 
 class ExplorerScreen extends StatefulWidget {
   const ExplorerScreen({Key? key}) : super(key: key);
@@ -9,6 +10,17 @@ class ExplorerScreen extends StatefulWidget {
 }
 
 class _ExplorerScreenState extends State<ExplorerScreen> {
+  final _pageController = PageController();
+  int currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController.addListener(() {
+      setState(() {});
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -26,13 +38,27 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
           ),
           Padding(
             padding: EdgeInsets.all(30.w),
-            child: TextFormField(
-              decoration: const InputDecoration(
-                  suffixIcon: Icon(Icons.search),
-                  floatingLabelBehavior: FloatingLabelBehavior.never,
-                  label: Text("Search Friends"),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(50)))),
+            child: GestureDetector(
+              onTap: () {
+                showSearch(context: context, delegate: CustomSearch());
+              },
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                height: 60,
+                decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.all(Radius.circular(50)),
+                    border: Border.all(width: 2, color: Colors.deepPurple)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: const [
+                    Text("Search Friends"),
+                    Icon(
+                      Icons.search,
+                      color: Colors.deepPurple,
+                    )
+                  ],
+                ),
+              ),
             ),
           ),
           const Divider(
@@ -41,6 +67,9 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
           ),
           Expanded(
             child: PageView(
+              controller: _pageController,
+              physics:
+                  const ScrollPhysics(parent: NeverScrollableScrollPhysics()),
               children: [
                 ListView.builder(itemBuilder: (context, index) {
                   return ListTile(
@@ -54,20 +83,27 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
               ],
             ),
           ),
-          BottomNavigationBar(items: const [
-            BottomNavigationBarItem(
-                icon: Icon(
-                  Icons.av_timer,
-                  color: Colors.black,
-                ),
-                label: "Recent"),
-            BottomNavigationBarItem(
-                icon: Icon(
-                  Icons.contacts,
-                  color: Colors.black,
-                ),
-                label: "Friends")
-          ])
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        onTap: ((value) {
+          _pageController.jumpToPage(value);
+          setState(() {
+            currentPage = value;
+          });
+        }),
+        currentIndex: currentPage,
+        items: const [
+          BottomNavigationBarItem(
+              icon: Icon(
+                Icons.av_timer,
+              ),
+              label: "Recent"),
+          BottomNavigationBarItem(
+              icon: Icon(
+                Icons.contacts,
+              ),
+              label: "Friends")
         ],
       ),
     );

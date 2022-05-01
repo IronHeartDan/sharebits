@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -12,6 +14,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool initialState = true;
+  bool isDragging = false;
   bool inCall = true;
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
 
@@ -27,7 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // initRenderer();
+    initRenderer();
   }
 
   void initRenderer() async {
@@ -36,7 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
       var mediaConstraints = <String, dynamic>{
         'audio': false,
         'video': {
-          'facingMode': currentCam == 0 ? 'environment' : 'user',
+          'facingMode': currentCam == 0 ? 'user' : 'environment',
           'optional': [],
         }
       };
@@ -54,12 +57,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    var size = MediaQuery.of(context).size;
-    var statusBarHeight = MediaQuery.of(context).padding.top;
+    var mediaQuery = MediaQuery.of(context);
+    var size = mediaQuery.size;
+    var statusBarHeight = mediaQuery.padding.top;
     if (initialState) {
       setState(() {
         xPosition = 10;
-        yPosition = size.height - 160;
+        yPosition = Platform.isIOS
+            ? size.height - 160 - mediaQuery.padding.bottom
+            : size.height - 160;
         initialState = false;
       });
     }
@@ -84,16 +90,26 @@ class _HomeScreenState extends State<HomeScreen> {
           Visibility(
             visible: inCall,
             child: AnimatedPositioned(
-              duration: const Duration(milliseconds: 100),
+              duration: isDragging
+                  ? const Duration()
+                  : const Duration(milliseconds: 100),
               top: yPosition,
               left: xPosition,
               child: GestureDetector(
+                onPanStart: (info) {
+                  setState(() {
+                    isDragging = true;
+                  });
+                },
                 onPanEnd: (info) {
                   setState(() {
+                    isDragging = false;
                     xPosition =
                         xPosition > (size.width / 2) ? size.width - 110 : 10;
                     yPosition = yPosition > (size.height / 2)
-                        ? size.height - 160
+                        ? Platform.isIOS
+                            ? size.height - 160 - mediaQuery.padding.bottom
+                            : size.height - 160
                         : statusBarHeight + 10;
                   });
                 },

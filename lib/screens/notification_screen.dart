@@ -27,12 +27,16 @@ class _NotificationScreenState extends State<NotificationScreen> {
             ElevatedButton(
                 onPressed: () {
                   NotificationAPI.showNotification(
-                    title: "New Notification",
-                    body: "This is a new notification from flutter",
-                  );
+                      title: "New Notification",
+                      body: "This is a new notification from flutter",
+                      payload: "PAYLOAD");
                 },
                 child: const Text("Show")),
-            ElevatedButton(onPressed: () {}, child: const Text("Show")),
+            ElevatedButton(
+                onPressed: () {
+                  NotificationAPI.hideNotification();
+                },
+                child: const Text("Cancel")),
             ElevatedButton(onPressed: () {}, child: const Text("Show")),
           ],
         ),

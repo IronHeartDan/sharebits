@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:sharebits/screens/explore_screen.dart';
+import 'package:sharebits/utils/notification_api.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 Future<void> saveTokenToDatabase(String token) async {
   String phone = FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3);
@@ -35,7 +38,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool initialState = true;
   bool isDragging = false;
   bool inCall = false;
+
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
+  late IO.Socket socket;
 
   List<MediaDeviceInfo>? _mediaDevicesList;
   MediaStream? _localStream;
@@ -67,6 +72,15 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     setupToken();
+    socket = IO.io(
+        "http://10.0.2.2:3000",
+        IO.OptionBuilder().setTransports(['websocket']).setExtraHeaders({
+          "phone": FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3)
+        }).build());
+    socket.onConnect((_) => {log("Socket Connected")});
+    socket.on("call",
+        (data) => {NotificationAPI.showNotification(title: "Incoming Call")});
+    socket.on("cancle", (data) => {NotificationAPI.hideNotification()});
     // initRenderer();
   }
 

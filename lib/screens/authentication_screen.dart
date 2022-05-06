@@ -122,17 +122,16 @@ class _AuthScreenState extends State<AuthScreen> {
                                 try {
                                   await auth.signInWithCredential(
                                       phoneAuthCredential);
+                                  Navigator.of(context).pushAndRemoveUntil(
+                                      MaterialPageRoute(
+                                          builder: (context) =>
+                                              const HomeScreen()),
+                                      (route) => false);
                                 } on FirebaseAuthException {
                                   setAlertBoxState(() {
                                     invalidCode = true;
                                   });
                                 }
-
-                                Navigator.of(context).pushAndRemoveUntil(
-                                    MaterialPageRoute(
-                                        builder: (context) =>
-                                            const HomeScreen()),
-                                    (route) => false);
                               }
                             },
                             child: const Text("Verify"))

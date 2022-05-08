@@ -6,13 +6,17 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sharebits/screens/authentication_screen.dart';
 import 'package:sharebits/screens/home_screen.dart';
-import 'package:sharebits/screens/notification_screen.dart';
 import 'package:sharebits/utils/notification_api.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // await Firebase.initializeApp();
 
-  NotificationAPI.showNotification(title: "Incoming Call");
+  NotificationAPI.hideNotification();
+  if(message.data.isNotEmpty){
+    var title = message.data["title"];
+    var body = message.data["body"];
+    NotificationAPI.showNotification(title: title,body: body,);
+  }
 }
 
 void main() async {
@@ -70,7 +74,7 @@ class MyApp extends StatelessWidget {
             home: // return const HomeScreen();
                 FirebaseAuth.instance.currentUser != null
                     ? const HomeScreen()
-                    : const NotificationScreen(),
+                    : const AuthScreen(),
           );
         });
   }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 
@@ -6,14 +7,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:sharebits/screens/explore_screen.dart';
 import 'package:sharebits/utils/notification_api.dart';
+import 'package:sharebits/utils/socket_connection.dart';
+import 'package:sharebits/webrtc/rtc_connection.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
-Future<void> saveTokenToDatabase(String token) async {
-  String phone = FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3);
+String phone = FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3);
 
+Future<void> saveTokenToDatabase(String token) async {
   var fireStore = FirebaseFirestore.instance;
   var check = await fireStore.collection("users").doc(phone).get();
   if (check.exists) {
@@ -35,22 +38,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool initialState = true;
-  bool isDragging = false;
-  bool inCall = false;
-
-  final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
-  late IO.Socket socket;
-
-  List<MediaDeviceInfo>? _mediaDevicesList;
-  MediaStream? _localStream;
-
-  int currentCam = 0;
-
-  int buttonsState = 0;
-  double xPosition = 0;
-  double yPosition = 0;
-
   Future<void> setupToken() async {
     // Get the token each time the application loads
     String? token = await FirebaseMessaging.instance.getToken();
@@ -68,42 +55,199 @@ class _HomeScreenState extends State<HomeScreen> {
     FirebaseMessaging.instance.onTokenRefresh.listen(saveTokenToDatabase);
   }
 
+  bool initialState = true;
+  bool isDragging = false;
+  bool inCall = false;
+  bool isCalling = false;
+
+  late IO.Socket socket;
+
+  final List<MediaDeviceInfo> _videoDevices = [];
+  final List<MediaDeviceInfo> _audioInDevices = [];
+  final List<MediaDeviceInfo> _audioOutDevices = [];
+  MediaStream? _localStream;
+
+  int currentCam = 0;
+
+  int buttonsState = 0;
+  double xPosition = 0;
+  double yPosition = 0;
+
+  final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
+  final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+  late BitsConnection bitsConnection;
+  late RTCSessionDescription localOffer;
+
+  final String socketServer = "https://sharebits.herokuapp.com";
+
   @override
   void initState() {
     super.initState();
     setupToken();
-    socket = IO.io(
-        "http://10.0.2.2:3000",
+    BitsSignalling().setSocket(IO.io(
+        // "http://10.0.2.2:3000",
+        socketServer,
         IO.OptionBuilder().setTransports(['websocket']).setExtraHeaders({
+          "type": 1,
           "phone": FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3)
-        }).build());
+        }).build()));
+    socket = BitsSignalling().getSocket();
     socket.onConnect((_) => {log("Socket Connected")});
-    socket.on("call",
-        (data) => {NotificationAPI.showNotification(title: "Incoming Call")});
-    socket.on("cancle", (data) => {NotificationAPI.hideNotification()});
-    // initRenderer();
+    socket.on("call", (data) {
+      if (data != null) {
+        var callRequestInfo = jsonDecode(data);
+        NotificationAPI.showNotification(
+            title: "Incoming Video Call",
+            body: callRequestInfo["from"],
+            payload: data);
+      } else {
+        log("RECEIVED A NULL CALL");
+      }
+    });
+    socket.on("cancelCall", (data) => {NotificationAPI.hideNotification()});
+    socket.on("callDeclined", (_) {
+      setState(() {
+        isCalling = false;
+      });
+    });
+    socket.on("callAccepted", (data) async {
+      var info = jsonDecode(data);
+      var remoteOffer =
+          RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);
+
+      bitsConnection.callerPeerConnection.onIceCandidate = (ice) {
+        var data = {"to": info["from"], "ice": ice.toMap(), "role": "caller"};
+        socket.emit("iceCandidate", jsonEncode(data));
+      };
+
+      await bitsConnection.callerPeerConnection.setLocalDescription(localOffer);
+      await bitsConnection.callerPeerConnection
+          .setRemoteDescription(remoteOffer);
+    });
+
+    socket.on("iceCandidate", (data) {
+      log("ICE RECEIVED");
+      var info = jsonDecode(data);
+      var ice = RTCIceCandidate(info["ice"]["candidate"], info["ice"]["sdpMid"],
+          info["ice"]["sdpMLineIndex"]);
+      if (info["role"] == "caller") {
+        log("ADDED TO CALLE");
+        bitsConnection.callePeerConnection.addCandidate(ice);
+      } else {
+        log("ADDED TO CALLER");
+        bitsConnection.callerPeerConnection.addCandidate(ice);
+      }
+    });
+
+    initPeer();
   }
 
-  void initRenderer() async {
+  void initPeer() async {
     await _localRenderer.initialize();
+    await _remoteRenderer.initialize();
+
     try {
       var mediaConstraints = <String, dynamic>{
-        'audio': false,
+        'audio': true,
         'video': {
-          'facingMode': currentCam == 0 ? 'user' : 'environment',
+          'facingMode': 'user',
           'optional': [],
         }
       };
-      var stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-      _mediaDevicesList = await navigator.mediaDevices.enumerateDevices();
+      var stream = await _getStream(mediaConstraints);
+
+      var devices = await navigator.mediaDevices.enumerateDevices();
+      for (var element in devices) {
+        if (element.kind != null) {
+          log(element.kind!);
+          switch (element.kind) {
+            case "videoinput":
+              _videoDevices.add(element);
+              break;
+            case "audioinput":
+              _audioInDevices.add(element);
+              break;
+            case "audiooutput":
+              _audioOutDevices.add(element);
+              break;
+          }
+        }
+      }
       _localStream = stream;
       _localRenderer.srcObject = _localStream;
+      bitsConnection = BitsConnection();
+      await bitsConnection.initConnection(_localStream!);
+
+      bitsConnection.callerPeerConnection.onTrack = (event) {
+        _remoteRenderer.srcObject = event.streams[0];
+      };
+
+      bitsConnection.callePeerConnection.onTrack = (event) {
+        _remoteRenderer.srcObject = event.streams[0];
+      };
+
+      bitsConnection.callerPeerConnection.onConnectionState = (event) {
+        switch (event) {
+          case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
+            setState(() {
+              isCalling = false;
+              inCall = false;
+            });
+            break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
+          case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+            setState(() {
+              isCalling = false;
+              inCall = false;
+            });
+            break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateNew:
+            break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
+          case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
+            setState(() {
+              isCalling = false;
+              inCall = true;
+            });
+            break;
+        }
+      };
+
+      bitsConnection.callePeerConnection.onConnectionState = (event) {
+        switch (event) {
+          case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
+            setState(() {
+              isCalling = false;
+              inCall = false;
+            });
+            break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
+          case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+            setState(() {
+              isCalling = false;
+              inCall = false;
+            });
+            break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateNew:
+            break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
+          case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
+            setState(() {
+              isCalling = false;
+              inCall = true;
+            });
+            break;
+        }
+      };
+
       setState(() {});
     } catch (e) {
-      if (kDebugMode) {
-        print(e.toString());
-      }
+      log("ERROR >>>>> ${e.toString()}");
     }
+  }
+
+  Future<MediaStream> _getStream(Map<String, dynamic> mediaConstraints) async {
+    return await navigator.mediaDevices.getUserMedia(mediaConstraints);
   }
 
   @override
@@ -134,10 +278,28 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
                 : null,
             child: RTCVideoView(
-              _localRenderer,
+              inCall ? _remoteRenderer : _localRenderer,
+              mirror: inCall ? false : true,
               objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
             ),
           )),
+          Visibility(
+            visible: isCalling,
+            child: Positioned(
+                top: 100,
+                left: 0,
+                right: 0,
+                child: Center(
+                    child: Text(
+                  "Calling",
+                  style: TextStyle(shadows: const [
+                    Shadow(
+                      color: Colors.white,
+                      blurRadius: 10,
+                    )
+                  ], fontSize: 100.sp),
+                ))),
+          ),
           Visibility(
             visible: inCall,
             child: AnimatedPositioned(
@@ -181,6 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ], borderRadius: BorderRadius.all(Radius.circular(10))),
                     child: RTCVideoView(
                       _localRenderer,
+                      mirror: true,
                       objectFit:
                           RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                     ),
@@ -195,7 +358,7 @@ class _HomeScreenState extends State<HomeScreen> {
               top: AppBar().preferredSize.height,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 200),
-                opacity: inCall ? buttonsState.toDouble() : 0,
+                opacity: 1, //inCall ? buttonsState.toDouble() : 0,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -203,11 +366,24 @@ class _HomeScreenState extends State<HomeScreen> {
                         shape: const CircleBorder(),
                         clipBehavior: Clip.hardEdge,
                         child: InkWell(
-                            onTap: () {
+                            onTap: () async {
+                              currentCam = currentCam == 0 ? 1 : 0;
+                              var mediaConstraints = <String, dynamic>{
+                                'audio': true,
+                                'video': {
+                                  'facingMode':
+                                      currentCam == 0 ? 'user' : 'environment',
+                                  'optional': [],
+                                }
+                              };
+
+                              var stream = await _getStream(mediaConstraints);
+                              await bitsConnection.removeStream(_localStream!);
+                              _localStream = stream;
+                              await bitsConnection.addStream(_localStream!);
                               setState(() {
-                                currentCam = currentCam == 0 ? 1 : 0;
+                                _localRenderer.srcObject = stream;
                               });
-                              initRenderer();
                             },
                             child: const Padding(
                               padding: EdgeInsets.all(10.0),
@@ -231,6 +407,34 @@ class _HomeScreenState extends State<HomeScreen> {
                               padding: EdgeInsets.all(10.0),
                               child: Icon(Icons.videocam),
                             ))),
+                    Card(
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.hardEdge,
+                        color: Colors.deepPurple,
+                        child: InkWell(
+                            onTap: () {
+                              showModalBottomSheet(
+                                  context: context,
+                                  builder: (context) {
+                                    return ListView.builder(
+                                        itemCount: _audioOutDevices.length,
+                                        itemBuilder: (context, index) {
+                                          var device = _audioOutDevices[index];
+                                          return ListTile(
+                                            leading:
+                                                const Icon(Icons.volume_up),
+                                            title: Text(device.label),
+                                          );
+                                        });
+                                  });
+                            },
+                            child: const Padding(
+                              padding: EdgeInsets.all(10.0),
+                              child: Icon(
+                                Icons.volume_up,
+                                color: Colors.white,
+                              ),
+                            ))),
                   ],
                 ),
               )),
@@ -242,32 +446,56 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Builder(builder: (context) {
           return FloatingActionButton(
             heroTag: "HERO_FAB",
-            backgroundColor: inCall ? Colors.red : null,
-            onPressed: inCall
-                ? () {
+            backgroundColor: inCall || isCalling ? Colors.red : null,
+            onPressed: inCall || isCalling
+                ? () async {
+                    await bitsConnection.callePeerConnection.close();
+                    await bitsConnection.callerPeerConnection.close();
                     setState(() {
                       inCall = false;
+                      isCalling = false;
                     });
+                    initPeer();
                   }
                 : () {
-                    showModalBottomSheet(
-                        constraints: BoxConstraints(
-                          maxHeight: size.height - statusBarHeight,
-                        ),
-                        shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(20))),
-                        clipBehavior: Clip.hardEdge,
-                        isScrollControlled: true,
-                        context: context,
-                        builder: (context) {
-                          return const ExplorerScreen();
-                        });
+                    requestCall();
+                    // showModalBottomSheet(
+                    //     constraints: BoxConstraints(
+                    //       maxHeight: size.height - statusBarHeight,
+                    //     ),
+                    //     shape: const RoundedRectangleBorder(
+                    //         borderRadius: BorderRadius.vertical(
+                    //             top: Radius.circular(20))),
+                    //     clipBehavior: Clip.hardEdge,
+                    //     isScrollControlled: true,
+                    //     context: context,
+                    //     builder: (context) {
+                    //       return const ExplorerScreen();
+                    //     });
                   },
-            child: inCall ? const Icon(Icons.call_end) : const Icon(Icons.call),
+            child: inCall || isCalling
+                ? const Icon(Icons.call_end)
+                : const Icon(Icons.call),
           );
         }),
       ),
     );
+  }
+
+  void requestCall() async {
+    localOffer = await bitsConnection.callerPeerConnection.createOffer();
+    var callRequestInfo;
+    if (phone == "7016783094") {
+      callRequestInfo = {"to": "9998082351", "offer": localOffer.toMap()};
+    } else {
+      callRequestInfo = {"to": "7016783094", "offer": localOffer.toMap()};
+    }
+
+    socket.emitWithAck("call", jsonEncode(callRequestInfo), ack: (ack) {
+      log(ack.toString());
+      setState(() {
+        isCalling = true;
+      });
+    });
   }
 }

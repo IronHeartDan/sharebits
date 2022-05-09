@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
           info["ice"]["sdpMLineIndex"]);
       if (info["role"] == "caller") {
         log("ADDED TO CALLE");
-        bitsConnection.callePeerConnection.addCandidate(ice);
+        bitsConnection.calleePeerConnection.addCandidate(ice);
       } else {
         log("ADDED TO CALLER");
         bitsConnection.callerPeerConnection.addCandidate(ice);
@@ -181,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _remoteRenderer.srcObject = event.streams[0];
       };
 
-      bitsConnection.callePeerConnection.onTrack = (event) {
+      bitsConnection.calleePeerConnection.onTrack = (event) {
         _remoteRenderer.srcObject = event.streams[0];
       };
 
@@ -212,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       };
 
-      bitsConnection.callePeerConnection.onConnectionState = (event) {
+      bitsConnection.calleePeerConnection.onConnectionState = (event) {
         switch (event) {
           case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
             setState(() {
@@ -278,7 +278,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 : null,
             child: RTCVideoView(
               inCall ? _remoteRenderer : _localRenderer,
-              mirror: inCall ? false : true,
+              mirror: inCall
+                  ? false
+                  : currentCam == 1
+                      ? false
+                      : true,
               objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
             ),
           )),
@@ -366,6 +370,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         clipBehavior: Clip.hardEdge,
                         child: InkWell(
                             onTap: () async {
+                              _localStream?.getTracks().forEach((track) async {
+                                await track.stop();
+                              });
                               currentCam = currentCam == 0 ? 1 : 0;
                               var mediaConstraints = <String, dynamic>{
                                 'audio': true,
@@ -376,13 +383,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                 }
                               };
 
-                              var stream = await _getStream(mediaConstraints);
-                              await bitsConnection.removeStream(_localStream!);
-                              _localStream = stream;
-                              await bitsConnection.addStream(_localStream!);
+                              _localStream = await _getStream(mediaConstraints);
+
                               setState(() {
-                                _localRenderer.srcObject = stream;
+                                _localRenderer.srcObject = _localStream;
                               });
+
+                              await bitsConnection.changeTracks(_localStream!);
                             },
                             child: const Padding(
                               padding: EdgeInsets.all(10.0),
@@ -448,7 +455,7 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: inCall || isCalling ? Colors.red : null,
             onPressed: inCall || isCalling
                 ? () async {
-                    await bitsConnection.callePeerConnection.close();
+                    await bitsConnection.calleePeerConnection.close();
                     await bitsConnection.callerPeerConnection.close();
                     setState(() {
                       inCall = false;

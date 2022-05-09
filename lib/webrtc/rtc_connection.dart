@@ -26,7 +26,7 @@ class BitsConnection {
 
   final config = {
     "iceServers": [
-      { "urls": "stun:stun.l.google.com:19302" },
+      {"urls": "stun:stun.l.google.com:19302"},
       {
         "urls": "turn:numb.viagenie.ca",
         "username": "webrtc@live.com",
@@ -35,8 +35,8 @@ class BitsConnection {
     ],
   };
 
-  late  RTCPeerConnection callerPeerConnection;
-  late  RTCPeerConnection callePeerConnection;
+  late RTCPeerConnection callerPeerConnection;
+  late RTCPeerConnection calleePeerConnection;
 
   static final BitsConnection _bitsConnection = BitsConnection.internal();
 
@@ -48,18 +48,39 @@ class BitsConnection {
 
   Future initConnection(MediaStream localStream) async {
     callerPeerConnection = await createPeerConnection(configuration);
-    callePeerConnection = await createPeerConnection(configuration);
+    calleePeerConnection = await createPeerConnection(configuration);
     await callerPeerConnection.addStream(localStream);
-    await callePeerConnection.addStream(localStream);
+    await calleePeerConnection.addStream(localStream);
   }
+
   Future addStream(MediaStream localStream) async {
     await callerPeerConnection.addStream(localStream);
-    await callePeerConnection.addStream(localStream);
+    await calleePeerConnection.addStream(localStream);
   }
 
   Future removeStream(MediaStream localStream) async {
     await callerPeerConnection.removeStream(localStream);
-    await callePeerConnection.removeStream(localStream);
+    await calleePeerConnection.removeStream(localStream);
   }
 
+  Future changeTracks(MediaStream stream) async {
+    if (callerPeerConnection.connectionState ==
+        RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+      var callerSenders = await callerPeerConnection.getSenders();
+      for (var sender in callerSenders) {
+        var track = stream
+            .getTracks()
+            .where((track) => sender.track?.kind == track.kind);
+        sender.replaceTrack(track.first);
+      }
+    } else {
+      var calleeSenders = await calleePeerConnection.getSenders();
+      for (var sender in calleeSenders) {
+        var track = stream
+            .getTracks()
+            .where((track) => sender.track?.kind == track.kind);
+        sender.replaceTrack(track.first);
+      }
+    }
+  }
 }

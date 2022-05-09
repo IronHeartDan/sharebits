@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:developer';
-import 'dart:typed_data';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -41,7 +40,7 @@ class NotificationAPI {
         break;
 
       case "ACCEPT":
-        var bitsConnection = BitsConnection().callePeerConnection;
+        var bitsConnection = BitsConnection().calleePeerConnection;
         await bitsConnection.setRemoteDescription(offer);
         var remoteOffer = await bitsConnection.createAnswer();
         var answer = {"to": payload["from"], "offer": remoteOffer.toMap()};
@@ -90,7 +89,7 @@ class NotificationAPI {
         id,
         title,
         body,
-        NotificationDetails(
+        const NotificationDetails(
           android: AndroidNotificationDetails(
             'CALL_CHANNEL',
             'Call',
@@ -99,14 +98,12 @@ class NotificationAPI {
             priority: Priority.max,
             // category: "CATEGORY_CALL",
             playSound: true,
-            sound: const RawResourceAndroidNotificationSound("incoming_call"),
-            enableVibration: true,
-            vibrationPattern: Int64List.fromList([1111, 1111]),
+            sound: RawResourceAndroidNotificationSound("incoming_call"),
             ongoing: true,
             autoCancel: false,
             fullScreenIntent: true,
             channelShowBadge: false,
-            actions: const [
+            actions: [
               AndroidNotificationAction("ACCEPT", "Accept",
                   showsUserInterface: true),
               AndroidNotificationAction("DECLINE", "Decline",
@@ -114,7 +111,7 @@ class NotificationAPI {
             ],
             // timeoutAfter: 6000
           ),
-          iOS: const DarwinNotificationDetails(),
+          iOS: DarwinNotificationDetails(),
         ),
         payload: payload);
   }

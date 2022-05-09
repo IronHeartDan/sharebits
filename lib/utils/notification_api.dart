@@ -13,7 +13,10 @@ class NotificationAPI {
   static Future initNotifications() async {
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    const initSettings = InitializationSettings(android: androidSettings);
+
+    const iosSettings = DarwinInitializationSettings();
+    const initSettings =
+        InitializationSettings(android: androidSettings, iOS: iosSettings);
     await _notifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: onDidReceiveNotificationResponse,
@@ -27,8 +30,8 @@ class NotificationAPI {
     var action = notificationResponse.actionId;
     var payload = jsonDecode(notificationResponse.payload!);
 
-    var offer =
-    RTCSessionDescription(payload["offer"]["sdp"], payload["offer"]["type"]);
+    var offer = RTCSessionDescription(
+        payload["offer"]["sdp"], payload["offer"]["type"]);
 
     var socket = BitsSignalling().getSocket();
 
@@ -43,13 +46,13 @@ class NotificationAPI {
         var remoteOffer = await bitsConnection.createAnswer();
         var answer = {"to": payload["from"], "offer": remoteOffer.toMap()};
         socket.emit("callAccepted", jsonEncode(answer));
-        bitsConnection.onIceCandidate = (ice){
+        bitsConnection.onIceCandidate = (ice) {
           var data = {
-            "to":payload["from"],
-            "ice":ice.toMap(),
-            "role":"calle"
+            "to": payload["from"],
+            "ice": ice.toMap(),
+            "role": "calle"
           };
-          socket.emit("iceCandidate",jsonEncode(data));
+          socket.emit("iceCandidate", jsonEncode(data));
         };
         bitsConnection.setLocalDescription(remoteOffer);
         break;
@@ -111,6 +114,7 @@ class NotificationAPI {
             ],
             // timeoutAfter: 6000
           ),
+          iOS: const DarwinNotificationDetails(),
         ),
         payload: payload);
   }

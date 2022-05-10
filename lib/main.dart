@@ -12,10 +12,13 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // await Firebase.initializeApp();
 
   NotificationAPI.hideNotification();
-  if(message.data.isNotEmpty){
+  if (message.data.isNotEmpty) {
     var title = message.data["title"];
     var body = message.data["body"];
-    NotificationAPI.showNotification(title: title,body: body,);
+    NotificationAPI.showNotification(
+      title: title,
+      body: body,
+    );
   }
 }
 

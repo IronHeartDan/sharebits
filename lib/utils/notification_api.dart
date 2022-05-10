@@ -13,10 +13,19 @@ class NotificationAPI {
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const iosSettings = DarwinInitializationSettings(notificationCategories: [
-      DarwinNotificationCategory("Incoming Call", actions: []),
+    final iosSettings = DarwinInitializationSettings(notificationCategories: [
+      DarwinNotificationCategory(
+        "Call",
+        actions: <DarwinNotificationAction>[
+          DarwinNotificationAction.plain("ACCEPT", "Accept",
+              options: {DarwinNotificationActionOption.foreground})
+        ],
+        options: <DarwinNotificationCategoryOption>{
+          DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
+        },
+      ),
     ]);
-    const initSettings =
+    final initSettings =
         InitializationSettings(android: androidSettings, iOS: iosSettings);
     await _notifications.initialize(
       initSettings,
@@ -113,7 +122,9 @@ class NotificationAPI {
             ],
             // timeoutAfter: 6000
           ),
-          iOS: DarwinNotificationDetails(),
+          iOS: DarwinNotificationDetails(
+            categoryIdentifier: "Call",
+          ),
         ),
         payload: payload);
   }

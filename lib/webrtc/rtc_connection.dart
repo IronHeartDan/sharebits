@@ -83,4 +83,10 @@ class BitsConnection {
       }
     }
   }
+
+  Future hideVideo(MediaStream stream) async {
+    stream.getVideoTracks().forEach((track) {
+      track.enabled = false;
+    });
+  }
 }

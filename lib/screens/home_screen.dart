@@ -408,7 +408,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         shape: const CircleBorder(),
                         clipBehavior: Clip.hardEdge,
                         child: InkWell(
-                            onTap: () {},
+                            onTap: () async {
+                              await bitsConnection.hideVideo(_localStream!);
+                            },
                             child: const Padding(
                               padding: EdgeInsets.all(10.0),
                               child: Icon(Icons.videocam),

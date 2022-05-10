@@ -13,7 +13,9 @@ class NotificationAPI {
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const iosSettings = DarwinInitializationSettings();
+    const iosSettings = DarwinInitializationSettings(notificationCategories: [
+      DarwinNotificationCategory("Incoming Call", actions: []),
+    ]);
     const initSettings =
         InitializationSettings(android: androidSettings, iOS: iosSettings);
     await _notifications.initialize(

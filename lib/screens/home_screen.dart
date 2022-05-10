@@ -346,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ], borderRadius: BorderRadius.all(Radius.circular(10))),
                     child: RTCVideoView(
                       _localRenderer,
-                      mirror: true,
+                      mirror: currentCam == 0 ? true : false,
                       objectFit:
                           RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                     ),

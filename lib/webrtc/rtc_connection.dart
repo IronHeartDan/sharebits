@@ -35,8 +35,7 @@ class BitsConnection {
     ],
   };
 
-  late RTCPeerConnection callerPeerConnection;
-  late RTCPeerConnection calleePeerConnection;
+  late RTCPeerConnection peerConnection;
 
   static final BitsConnection _bitsConnection = BitsConnection.internal();
 
@@ -47,46 +46,39 @@ class BitsConnection {
   BitsConnection.internal();
 
   Future initConnection(MediaStream localStream) async {
-    callerPeerConnection = await createPeerConnection(configuration);
-    calleePeerConnection = await createPeerConnection(configuration);
-    await callerPeerConnection.addStream(localStream);
-    await calleePeerConnection.addStream(localStream);
+    peerConnection = await createPeerConnection(configuration);
+    await peerConnection.addStream(localStream);
   }
 
   Future addStream(MediaStream localStream) async {
-    await callerPeerConnection.addStream(localStream);
-    await calleePeerConnection.addStream(localStream);
+    await peerConnection.addStream(localStream);
   }
 
   Future removeStream(MediaStream localStream) async {
-    await callerPeerConnection.removeStream(localStream);
-    await calleePeerConnection.removeStream(localStream);
+    await peerConnection.removeStream(localStream);
   }
 
   Future changeTracks(MediaStream stream) async {
-    if (callerPeerConnection.connectionState ==
-        RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
-      var callerSenders = await callerPeerConnection.getSenders();
-      for (var sender in callerSenders) {
-        var track = stream
-            .getTracks()
-            .where((track) => sender.track?.kind == track.kind);
-        sender.replaceTrack(track.first);
-      }
-    } else {
-      var calleeSenders = await calleePeerConnection.getSenders();
+      var calleeSenders = await peerConnection.getSenders();
       for (var sender in calleeSenders) {
         var track = stream
             .getTracks()
             .where((track) => sender.track?.kind == track.kind);
-        sender.replaceTrack(track.first);
+        if(track.isNotEmpty){
+          sender.replaceTrack(track.first);
+        }
       }
-    }
   }
 
-  Future hideVideo(MediaStream stream) async {
+  Future toggleVideo(MediaStream stream) async {
     stream.getVideoTracks().forEach((track) {
-      track.enabled = false;
+      track.enabled = !track.enabled;
+    });
+  }
+
+  Future toggleAudio(MediaStream stream) async {
+    stream.getAudioTracks().forEach((track) {
+      track.enabled = !track.enabled;
     });
   }
 }

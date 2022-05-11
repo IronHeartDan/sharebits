@@ -114,28 +114,21 @@ class _HomeScreenState extends State<HomeScreen> {
       var remoteOffer =
           RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);
 
-      bitsConnection.callerPeerConnection.onIceCandidate = (ice) {
-        var data = {"to": info["from"], "ice": ice.toMap(), "role": "caller"};
+      bitsConnection.peerConnection.onIceCandidate = (ice) {
+        var data = {"to": info["from"], "ice": ice.toMap()};
         socket.emit("iceCandidate", jsonEncode(data));
       };
 
-      await bitsConnection.callerPeerConnection.setLocalDescription(localOffer);
-      await bitsConnection.callerPeerConnection
+      await bitsConnection.peerConnection.setLocalDescription(localOffer);
+      await bitsConnection.peerConnection
           .setRemoteDescription(remoteOffer);
     });
 
     socket.on("iceCandidate", (data) {
-      log("ICE RECEIVED");
       var info = jsonDecode(data);
       var ice = RTCIceCandidate(info["ice"]["candidate"], info["ice"]["sdpMid"],
           info["ice"]["sdpMLineIndex"]);
-      if (info["role"] == "caller") {
-        log("ADDED TO CALLE");
-        bitsConnection.calleePeerConnection.addCandidate(ice);
-      } else {
-        log("ADDED TO CALLER");
-        bitsConnection.callerPeerConnection.addCandidate(ice);
-      }
+        bitsConnection.peerConnection.addCandidate(ice);
     });
 
     initPeer();
@@ -158,7 +151,6 @@ class _HomeScreenState extends State<HomeScreen> {
       var devices = await navigator.mediaDevices.enumerateDevices();
       for (var element in devices) {
         if (element.kind != null) {
-          log(element.kind!);
           switch (element.kind) {
             case "videoinput":
               _videoDevices.add(element);
@@ -175,44 +167,13 @@ class _HomeScreenState extends State<HomeScreen> {
       _localStream = stream;
       _localRenderer.srcObject = _localStream;
       bitsConnection = BitsConnection();
-      await bitsConnection.initConnection(_localStream!);
+      await bitsConnection.initConnection(stream);
 
-      bitsConnection.callerPeerConnection.onTrack = (event) {
+      bitsConnection.peerConnection.onTrack = (event) {
         _remoteRenderer.srcObject = event.streams[0];
       };
 
-      bitsConnection.calleePeerConnection.onTrack = (event) {
-        _remoteRenderer.srcObject = event.streams[0];
-      };
-
-      bitsConnection.callerPeerConnection.onConnectionState = (event) {
-        switch (event) {
-          case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
-            setState(() {
-              isCalling = false;
-              inCall = false;
-            });
-            break;
-          case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
-          case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
-            setState(() {
-              isCalling = false;
-              inCall = false;
-            });
-            break;
-          case RTCPeerConnectionState.RTCPeerConnectionStateNew:
-            break;
-          case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
-          case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
-            setState(() {
-              isCalling = false;
-              inCall = true;
-            });
-            break;
-        }
-      };
-
-      bitsConnection.calleePeerConnection.onConnectionState = (event) {
+      bitsConnection.peerConnection.onConnectionState = (event) {
         switch (event) {
           case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
             setState(() {
@@ -361,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
               top: AppBar().preferredSize.height,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 200),
-                opacity: 1, //inCall ? buttonsState.toDouble() : 0,
+                opacity: inCall || isCalling ? buttonsState.toDouble() : 0,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -370,26 +331,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         clipBehavior: Clip.hardEdge,
                         child: InkWell(
                             onTap: () async {
-                              _localStream?.getTracks().forEach((track) async {
-                                await track.stop();
-                              });
+                              await _localStream!.getVideoTracks()[0].stop();
                               currentCam = currentCam == 0 ? 1 : 0;
                               var mediaConstraints = <String, dynamic>{
-                                'audio': true,
                                 'video': {
                                   'facingMode':
                                       currentCam == 0 ? 'user' : 'environment',
                                   'optional': [],
                                 }
                               };
-
-                              _localStream = await _getStream(mediaConstraints);
-
+                              var stream = await _getStream(mediaConstraints);
+                              await bitsConnection.changeTracks(stream);
+                              _localStream!.getVideoTracks()[0] = stream.getVideoTracks()[0];
                               setState(() {
-                                _localRenderer.srcObject = _localStream;
-                              });
 
-                              await bitsConnection.changeTracks(_localStream!);
+                              });
                             },
                             child: const Padding(
                               padding: EdgeInsets.all(10.0),
@@ -398,22 +354,46 @@ class _HomeScreenState extends State<HomeScreen> {
                     Card(
                         shape: const CircleBorder(),
                         clipBehavior: Clip.hardEdge,
+                        color: _localStream != null &&
+                                _localStream!.getAudioTracks()[0].enabled
+                            ? Colors.deepPurple
+                            : Colors.white,
                         child: InkWell(
-                            onTap: () {},
-                            child: const Padding(
-                              padding: EdgeInsets.all(10.0),
-                              child: Icon(Icons.flash_off),
+                            onTap: () async {
+                              await bitsConnection.toggleAudio(_localStream!);
+                              setState(() {});
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(10.0),
+                              child: _localStream != null &&
+                                      _localStream!.getAudioTracks()[0].enabled
+                                  ? const Icon(
+                                      Icons.mic,
+                                      color: Colors.white,
+                                    )
+                                  : const Icon(Icons.mic_off),
                             ))),
                     Card(
                         shape: const CircleBorder(),
                         clipBehavior: Clip.hardEdge,
+                        color: _localStream != null &&
+                                _localStream!.getVideoTracks()[0].enabled
+                            ? Colors.deepPurple
+                            : Colors.white,
                         child: InkWell(
                             onTap: () async {
-                              await bitsConnection.hideVideo(_localStream!);
+                              await bitsConnection.toggleVideo(_localStream!);
+                              setState(() {});
                             },
-                            child: const Padding(
-                              padding: EdgeInsets.all(10.0),
-                              child: Icon(Icons.videocam),
+                            child: Padding(
+                              padding: const EdgeInsets.all(10.0),
+                              child: _localStream != null &&
+                                      _localStream!.getVideoTracks()[0].enabled
+                                  ? const Icon(
+                                      Icons.videocam,
+                                      color: Colors.white,
+                                    )
+                                  : const Icon(Icons.videocam_off),
                             ))),
                     Card(
                         shape: const CircleBorder(),
@@ -457,13 +437,23 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: inCall || isCalling ? Colors.red : null,
             onPressed: inCall || isCalling
                 ? () async {
-                    await bitsConnection.calleePeerConnection.close();
-                    await bitsConnection.callerPeerConnection.close();
-                    setState(() {
-                      inCall = false;
-                      isCalling = false;
-                    });
-                    initPeer();
+                    if (isCalling) {
+                      if (phone == "7016783094") {
+                        socket.emit("cancelCall", "9998082351");
+                      } else {
+                        socket.emit("cancelCall", "7016783094");
+                      }
+                      setState(() {
+                        isCalling = false;
+                      });
+                    } else if (inCall) {
+                      await bitsConnection.peerConnection.close();
+                      setState(() {
+                        inCall = false;
+                        isCalling = false;
+                      });
+                      initPeer();
+                    }
                   }
                 : () {
                     requestCall();
@@ -491,7 +481,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void requestCall() async {
-    localOffer = await bitsConnection.callerPeerConnection.createOffer();
+    localOffer = await bitsConnection.peerConnection.createOffer();
     var callRequestInfo;
     if (phone == "7016783094") {
       callRequestInfo = {"to": "9998082351", "offer": localOffer.toMap()};

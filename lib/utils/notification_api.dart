@@ -51,17 +51,13 @@ class NotificationAPI {
         break;
 
       case "ACCEPT":
-        var bitsConnection = BitsConnection().calleePeerConnection;
+        var bitsConnection = BitsConnection().peerConnection;
         await bitsConnection.setRemoteDescription(offer);
         var remoteOffer = await bitsConnection.createAnswer();
         var answer = {"to": payload["from"], "offer": remoteOffer.toMap()};
         socket.emit("callAccepted", jsonEncode(answer));
         bitsConnection.onIceCandidate = (ice) {
-          var data = {
-            "to": payload["from"],
-            "ice": ice.toMap(),
-            "role": "calle"
-          };
+          var data = {"to": payload["from"], "ice": ice.toMap()};
           socket.emit("iceCandidate", jsonEncode(data));
         };
         bitsConnection.setLocalDescription(remoteOffer);

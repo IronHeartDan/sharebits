@@ -120,15 +120,14 @@ class _HomeScreenState extends State<HomeScreen> {
       };
 
       await bitsConnection.peerConnection.setLocalDescription(localOffer);
-      await bitsConnection.peerConnection
-          .setRemoteDescription(remoteOffer);
+      await bitsConnection.peerConnection.setRemoteDescription(remoteOffer);
     });
 
     socket.on("iceCandidate", (data) {
       var info = jsonDecode(data);
       var ice = RTCIceCandidate(info["ice"]["candidate"], info["ice"]["sdpMid"],
           info["ice"]["sdpMLineIndex"]);
-        bitsConnection.peerConnection.addCandidate(ice);
+      bitsConnection.peerConnection.addCandidate(ice);
     });
 
     initPeer();
@@ -322,7 +321,8 @@ class _HomeScreenState extends State<HomeScreen> {
               top: AppBar().preferredSize.height,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 200),
-                opacity: 1 ,// inCall || isCalling ? buttonsState.toDouble() : 0,
+                opacity: 1,
+                // inCall || isCalling ? buttonsState.toDouble() : 0,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -331,7 +331,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         clipBehavior: Clip.hardEdge,
                         child: InkWell(
                             onTap: () async {
-                              await _localStream!.getVideoTracks()[0].stop();
+                              _localStream!
+                                  .getVideoTracks()
+                                  .forEach((track) async {
+                                await track.stop();
+                              });
                               currentCam = currentCam == 0 ? 1 : 0;
                               var mediaConstraints = <String, dynamic>{
                                 'video': {
@@ -340,11 +344,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                   'optional': [],
                                 }
                               };
+
                               var stream = await _getStream(mediaConstraints);
-                              await bitsConnection.changeTracks(stream);
-                              await _localStream!.addTrack(stream.getVideoTracks()[0]);
-                              setState(() {
-                              });
+                              await bitsConnection.changeVideoTracks(stream);
+
+                              await stream
+                                  .addTrack(_localStream!.getAudioTracks()[0]);
+
+                              _localStream = stream;
+                              _localRenderer.srcObject = _localStream;
+
+                              setState(() {});
                             },
                             child: const Padding(
                               padding: EdgeInsets.all(10.0),

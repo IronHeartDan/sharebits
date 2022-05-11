@@ -58,16 +58,15 @@ class BitsConnection {
     await peerConnection.removeStream(localStream);
   }
 
-  Future changeTracks(MediaStream stream) async {
-      var senders = await peerConnection.getSenders();
-      for (var sender in senders) {
-        var track = stream
-            .getTracks()
-            .where((track) => sender.track?.kind == track.kind);
-        if(track.isNotEmpty){
-          sender.replaceTrack(track.first);
-        }
+  Future changeVideoTracks(MediaStream stream) async {
+    var senders = await peerConnection.getSenders();
+    for (var sender in senders) {
+      var track =
+          stream.getTracks().where((track) => sender.track?.kind == track.kind);
+      if (track.isNotEmpty) {
+        sender.replaceTrack(track.first);
       }
+    }
   }
 
   Future toggleVideo(MediaStream stream) async {

@@ -8,10 +8,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:sharebits/utils/notification_api.dart';
 import 'package:sharebits/utils/socket_connection.dart';
 import 'package:sharebits/webrtc/rtc_connection.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+
+import '../utils/constants.dart';
+import 'explore_screen.dart';
 
 String phone = FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3);
 
@@ -77,7 +81,6 @@ class _HomeScreenState extends State<HomeScreen> {
   late BitsConnection bitsConnection;
   late RTCSessionDescription localOffer;
 
-  final String socketServer = "https://sharebits.herokuapp.com";
 
   @override
   void initState() {
@@ -130,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bitsConnection.peerConnection.addCandidate(ice);
     });
 
-    initPeer();
+    // initPeer();
   }
 
   void initPeer() async {
@@ -207,6 +210,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<MediaStream> _getStream(Map<String, dynamic> mediaConstraints) async {
     return await navigator.mediaDevices.getUserMedia(mediaConstraints);
+  }
+
+  Future<bool> _checkContactsPermission() async {
+    var check = await Permission.contacts.status;
+    if (check.isGranted) {
+      return true;
+    }
+
+    if (check.isPermanentlyDenied) {
+      return false;
+    }
+
+    check = await Permission.contacts.request();
+    return check.isGranted;
   }
 
   @override
@@ -464,21 +481,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       initPeer();
                     }
                   }
-                : () {
-                    requestCall();
-                    // showModalBottomSheet(
-                    //     constraints: BoxConstraints(
-                    //       maxHeight: size.height - statusBarHeight,
-                    //     ),
-                    //     shape: const RoundedRectangleBorder(
-                    //         borderRadius: BorderRadius.vertical(
-                    //             top: Radius.circular(20))),
-                    //     clipBehavior: Clip.hardEdge,
-                    //     isScrollControlled: true,
-                    //     context: context,
-                    //     builder: (context) {
-                    //       return const ExplorerScreen();
-                    //     });
+                : () async {
+                    if (!(await _checkContactsPermission())) {
+                      return;
+                    } else {
+                      showModalBottomSheet(
+                          constraints: BoxConstraints(
+                            maxHeight: size.height - statusBarHeight,
+                          ),
+                          shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(20))),
+                          clipBehavior: Clip.hardEdge,
+                          isScrollControlled: true,
+                          context: context,
+                          builder: (context) {
+                            return const ExplorerScreen();
+                          });
+                    }
                   },
             child: inCall || isCalling
                 ? const Icon(Icons.call_end)

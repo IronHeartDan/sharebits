@@ -59,8 +59,8 @@ class BitsConnection {
   }
 
   Future changeTracks(MediaStream stream) async {
-      var calleeSenders = await peerConnection.getSenders();
-      for (var sender in calleeSenders) {
+      var senders = await peerConnection.getSenders();
+      for (var sender in senders) {
         var track = stream
             .getTracks()
             .where((track) => sender.track?.kind == track.kind);

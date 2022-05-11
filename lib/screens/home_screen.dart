@@ -259,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(shadows: const [
                     Shadow(
                       color: Colors.white,
-                      blurRadius: 10,
+                      blurRadius: 5,
                     )
                   ], fontSize: 100.sp),
                 ))),
@@ -322,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
               top: AppBar().preferredSize.height,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 200),
-                opacity: inCall || isCalling ? buttonsState.toDouble() : 0,
+                opacity: 1 ,// inCall || isCalling ? buttonsState.toDouble() : 0,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -342,9 +342,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               };
                               var stream = await _getStream(mediaConstraints);
                               await bitsConnection.changeTracks(stream);
-                              _localStream!.getVideoTracks()[0] = stream.getVideoTracks()[0];
+                              await _localStream!.addTrack(stream.getVideoTracks()[0]);
                               setState(() {
-
                               });
                             },
                             child: const Padding(

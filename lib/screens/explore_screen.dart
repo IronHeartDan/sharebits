@@ -66,7 +66,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
       }
     }
 
-    var results = await http.post(Uri.parse(socketServer),
+    var results = await http.post(Uri.parse("$socketServer/users"),
         headers: {
           "content-type": "application/json",
         },

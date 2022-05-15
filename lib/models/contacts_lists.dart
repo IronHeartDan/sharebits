@@ -1,8 +1,8 @@
-import 'package:contacts_service/contacts_service.dart';
+import 'package:sharebits/models/contact.dart';
 
 class ContactLists {
-  final List<Contact> foundContacts;
-  final List<Contact> notFoundContacts;
+  final List<BitsContact> foundContacts;
+  final List<BitsContact> notFoundContacts;
 
   ContactLists(this.foundContacts, this.notFoundContacts);
 }

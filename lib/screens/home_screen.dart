@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+import 'package:sharebits/states/call_state.dart';
 import 'package:sharebits/utils/notification_api.dart';
 import 'package:sharebits/utils/socket_connection.dart';
 import 'package:sharebits/webrtc/rtc_connection.dart';
@@ -60,8 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool initialState = true;
   bool isDragging = false;
-  bool inCall = false;
-  bool isCalling = false;
+  late int callState;
 
   late IO.Socket socket;
 
@@ -79,8 +80,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   late BitsConnection bitsConnection;
-  late RTCSessionDescription localOffer;
-
 
   @override
   void initState() {
@@ -108,9 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     socket.on("cancelCall", (data) => {NotificationAPI.hideNotification()});
     socket.on("callDeclined", (_) {
-      setState(() {
-        isCalling = false;
-      });
+      context.read<CallState>().changeCallState(0);
     });
     socket.on("callAccepted", (data) async {
       var info = jsonDecode(data);
@@ -122,7 +119,8 @@ class _HomeScreenState extends State<HomeScreen> {
         socket.emit("iceCandidate", jsonEncode(data));
       };
 
-      await bitsConnection.peerConnection.setLocalDescription(localOffer);
+      await bitsConnection.peerConnection
+          .setLocalDescription(bitsConnection.localOffer);
       await bitsConnection.peerConnection.setRemoteDescription(remoteOffer);
     });
 
@@ -133,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bitsConnection.peerConnection.addCandidate(ice);
     });
 
-    // initPeer();
+    initPeer();
   }
 
   void initPeer() async {
@@ -178,26 +176,17 @@ class _HomeScreenState extends State<HomeScreen> {
       bitsConnection.peerConnection.onConnectionState = (event) {
         switch (event) {
           case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
-            setState(() {
-              isCalling = false;
-              inCall = false;
-            });
+            context.read<CallState>().changeCallState(0);
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
           case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
-            setState(() {
-              isCalling = false;
-              inCall = false;
-            });
+            context.read<CallState>().changeCallState(0);
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateNew:
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
           case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
-            setState(() {
-              isCalling = false;
-              inCall = true;
-            });
+            context.read<CallState>().changeCallState(2);
             break;
         }
       };
@@ -228,6 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    callState = context.watch<CallState>().callState;
     var mediaQuery = MediaQuery.of(context);
     var size = mediaQuery.size;
     var statusBarHeight = mediaQuery.padding.top;
@@ -246,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Positioned(
               child: InkWell(
-            onTap: inCall
+            onTap: callState == 2
                 ? () {
                     setState(() {
                       buttonsState = buttonsState == 0 ? 1 : 0;
@@ -254,8 +244,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
                 : null,
             child: RTCVideoView(
-              inCall ? _remoteRenderer : _localRenderer,
-              mirror: inCall
+              callState == 2 ? _remoteRenderer : _localRenderer,
+              mirror: callState == 2
                   ? false
                   : currentCam == 1
                       ? false
@@ -264,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           )),
           Visibility(
-            visible: isCalling,
+            visible: callState == 1,
             child: Positioned(
                 top: 100,
                 left: 0,
@@ -281,7 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ))),
           ),
           Visibility(
-            visible: inCall,
+            visible: callState == 2,
             child: AnimatedPositioned(
               duration: isDragging
                   ? const Duration()
@@ -456,28 +446,21 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: AnimatedScale(
         duration: const Duration(milliseconds: 200),
-        scale: inCall ? buttonsState.toDouble() : 1,
+        scale: callState == 2 ? buttonsState.toDouble() : 1,
         child: Builder(builder: (context) {
           return FloatingActionButton(
             heroTag: "HERO_FAB",
-            backgroundColor: inCall || isCalling ? Colors.red : null,
-            onPressed: inCall || isCalling
+            backgroundColor:
+                callState == 1 || callState == 2 ? Colors.red : null,
+            onPressed: callState == 1 || callState == 2
                 ? () async {
-                    if (isCalling) {
-                      if (phone == "7016783094") {
-                        socket.emit("cancelCall", "9998082351");
-                      } else {
-                        socket.emit("cancelCall", "7016783094");
-                      }
-                      setState(() {
-                        isCalling = false;
-                      });
-                    } else if (inCall) {
+                    if (callState == 1) {
+                      // end call
+                      context
+                          .read<CallState>()
+                          .changeCallState(0);
+                    } else if (callState == 2) {
                       await bitsConnection.peerConnection.close();
-                      setState(() {
-                        inCall = false;
-                        isCalling = false;
-                      });
                       initPeer();
                     }
                   }
@@ -500,29 +483,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           });
                     }
                   },
-            child: inCall || isCalling
+            child: callState == 1 || callState == 2
                 ? const Icon(Icons.call_end)
                 : const Icon(Icons.call),
           );
         }),
       ),
     );
-  }
-
-  void requestCall() async {
-    localOffer = await bitsConnection.peerConnection.createOffer();
-    var callRequestInfo;
-    if (phone == "7016783094") {
-      callRequestInfo = {"to": "9998082351", "offer": localOffer.toMap()};
-    } else {
-      callRequestInfo = {"to": "7016783094", "offer": localOffer.toMap()};
-    }
-
-    socket.emitWithAck("call", jsonEncode(callRequestInfo), ack: (ack) {
-      log(ack.toString());
-      setState(() {
-        isCalling = true;
-      });
-    });
   }
 }

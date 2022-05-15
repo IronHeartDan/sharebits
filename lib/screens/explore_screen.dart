@@ -1,12 +1,16 @@
 import 'dart:convert';
 
 import 'package:contacts_service/contacts_service.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
-import 'package:sharebits/models/contacts_lists.dart';
+import 'package:provider/provider.dart';
+import 'package:sharebits/models/contact.dart';
+import 'package:sharebits/states/call_state.dart';
 import 'package:sharebits/utils/custom_search.dart';
+import 'package:sharebits/utils/socket_connection.dart';
+import 'package:sharebits/webrtc/rtc_connection.dart';
 
 import '../utils/constants.dart';
 
@@ -21,7 +25,11 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
   final _pageController = PageController();
   int currentPage = 0;
 
-  late Future<ContactLists> _future;
+  late Future<List<BitsContact>> _future;
+  var bitsSignalling = BitsSignalling();
+  var bitsConnection = BitsConnection();
+
+  late Box box;
 
   @override
   void initState() {
@@ -32,11 +40,19 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
     _future = _getContacts();
   }
 
-  Future<ContactLists> _getContacts() async {
+  Future<List<BitsContact>> _getContacts() async {
+    box = Hive.box("contacts");
+
+    var localContacts = box.get("contacts");
+
+    if (localContacts != null) {
+      return localContacts;
+    }
+
     List<Contact> contacts =
         await ContactsService.getContacts(withThumbnails: false);
 
-    Map<String, Contact> filteredContacts = {};
+    Map<String, BitsContact> filteredContacts = {};
     var phoneNumbers = [];
 
     for (var contact in contacts) {
@@ -53,12 +69,20 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
             }
             if (number.startsWith("+91") && number.length == 13) {
               phoneNumbers.add({"phoneNumber": number});
-              filteredContacts[number] = contact;
+              filteredContacts[number] = BitsContact(
+                  contact.displayName != null
+                      ? contact.displayName!
+                      : number.substring(3),
+                  number.substring(3));
             } else {
               number = "+91$number";
               if (number.length == 13) {
                 phoneNumbers.add({"phoneNumber": number});
-                filteredContacts[number] = contact;
+                filteredContacts[number] = BitsContact(
+                    contact.displayName != null
+                        ? contact.displayName!
+                        : number.substring(3),
+                    number.substring(3));
               }
             }
           }
@@ -73,16 +97,14 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
         body: jsonEncode({"phoneNumbers": phoneNumbers}));
     var data = await jsonDecode(results.body) as List<dynamic>;
 
-    var foundContacts = data.map((element) {
-      var con = filteredContacts[element]!;
-      filteredContacts.remove(element);
-      return con;
+    data.map((element) {
+      filteredContacts[element]!.isAccount = true;
     }).toList();
 
-    var notFoundContacts = filteredContacts.values.toList();
+    var processed = filteredContacts.values.toList();
+    box.put("contacts", processed);
 
-    var contactLists = ContactLists(foundContacts, notFoundContacts);
-    return contactLists;
+    return processed;
   }
 
   Future<void> _refresh() async {
@@ -163,30 +185,54 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                         }
 
                         if (data.hasData) {
-                          var contacts = data.data as ContactLists;
+                          var contacts = data.data as List<BitsContact>;
+                          var found = contacts
+                              .where((element) => element.isAccount)
+                              .toList();
+                          var notFound = contacts
+                              .where((element) => !element.isAccount)
+                              .toList();
                           return CustomScrollView(
                             slivers: [
                               SliverList(
                                   delegate: SliverChildBuilderDelegate(
                                       (context, index) {
-                                var contact = contacts.foundContacts[index];
+                                var contact = found[index];
                                 return ListTile(
-                                  title: Text("${contact.displayName}"),
+                                  title: Text(contact.name),
                                   trailing: InkWell(
-                                    onTap: () {},
+                                    onTap: () async {
+                                      await bitsConnection.createOffer();
+                                      var localOffer =
+                                          bitsConnection.localOffer;
+                                      var callRequestInfo = {
+                                        "to": contact.phone,
+                                        "offer": localOffer.toMap()
+                                      };
+
+                                      bitsSignalling.socket.emitWithAck(
+                                          "call", jsonEncode(callRequestInfo),
+                                          ack: (ack) {
+                                        context
+                                            .read<CallState>()
+                                            .changeCallState(1);
+
+                                        Navigator.of(context).pop();
+                                      });
+                                    },
                                     child: const Padding(
                                       padding: EdgeInsets.all(8.0),
                                       child: Icon(Icons.videocam),
                                     ),
                                   ),
                                 );
-                              }, childCount: contacts.foundContacts.length)),
+                              }, childCount: found.length)),
                               SliverList(
                                   delegate: SliverChildBuilderDelegate(
                                       (context, index) {
-                                var contact = contacts.notFoundContacts[index];
+                                var contact = notFound[index];
                                 return ListTile(
-                                  title: Text("${contact.displayName}"),
+                                  title: Text(contact.name),
                                   trailing: TextButton(
                                     onPressed: () {},
                                     child: const Text(
@@ -196,7 +242,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                                     ),
                                   ),
                                 );
-                              }, childCount: contacts.notFoundContacts.length)),
+                              }, childCount: notFound.length)),
                             ],
                           );
                         }

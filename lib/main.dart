@@ -3,10 +3,16 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/adapters.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 import 'package:sharebits/screens/authentication_screen.dart';
 import 'package:sharebits/screens/home_screen.dart';
+import 'package:sharebits/states/call_state.dart';
 import 'package:sharebits/utils/notification_api.dart';
+
+import 'models/contact.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // await Firebase.initializeApp();
@@ -24,8 +30,15 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Hive.initFlutter();
+  Hive.registerAdapter(BitsContactAdapter());
+  await Hive.openBox("contacts");
+
   await Firebase.initializeApp();
+
   NotificationAPI.initNotifications();
+
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     print('Got a message whilst in the foreground!');
@@ -35,6 +48,7 @@ void main() async {
       print('Message also contained a notification: ${message.notification}');
     }
   });
+
   runApp(const MyApp());
 }
 
@@ -59,25 +73,28 @@ class MyApp extends StatelessWidget {
     return ScreenUtilInit(
         designSize: const Size(1080, 1920),
         builder: (context) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            title: 'WebRTC Based Communication',
-            theme: ThemeData(
-              // This is the theme of your application.
-              //
-              // Try running your application with "flutter run". You'll see the
-              // application has a blue toolbar. Then, without quitting the app, try
-              // changing the primarySwatch below to Colors.green and then invoke
-              // "hot reload" (press "r" in the console where you ran "flutter run",
-              // or simply save your changes to "hot reload" in a Flutter IDE).
-              // Notice that the counter didn't reset back to zero; the application
-              // is not restarted.
-              primarySwatch: Colors.deepPurple,
+          return MultiProvider(
+            providers: [ChangeNotifierProvider(create: (_) => CallState())],
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              title: 'WebRTC Based Communication',
+              theme: ThemeData(
+                // This is the theme of your application.
+                //
+                // Try running your application with "flutter run". You'll see the
+                // application has a blue toolbar. Then, without quitting the app, try
+                // changing the primarySwatch below to Colors.green and then invoke
+                // "hot reload" (press "r" in the console where you ran "flutter run",
+                // or simply save your changes to "hot reload" in a Flutter IDE).
+                // Notice that the counter didn't reset back to zero; the application
+                // is not restarted.
+                primarySwatch: Colors.deepPurple,
+              ),
+              home: // return const HomeScreen();
+                  FirebaseAuth.instance.currentUser != null
+                      ? const HomeScreen()
+                      : const AuthScreen(),
             ),
-            home: // return const HomeScreen();
-                FirebaseAuth.instance.currentUser != null
-                    ? const HomeScreen()
-                    : const AuthScreen(),
           );
         });
   }

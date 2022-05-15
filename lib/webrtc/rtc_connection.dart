@@ -36,6 +36,7 @@ class BitsConnection {
   };
 
   late RTCPeerConnection peerConnection;
+  late RTCSessionDescription localOffer;
 
   static final BitsConnection _bitsConnection = BitsConnection.internal();
 
@@ -48,6 +49,10 @@ class BitsConnection {
   Future initConnection(MediaStream localStream) async {
     peerConnection = await createPeerConnection(configuration);
     await peerConnection.addStream(localStream);
+  }
+
+  Future createOffer() async {
+    localOffer = await peerConnection.createOffer();
   }
 
   Future addStream(MediaStream localStream) async {

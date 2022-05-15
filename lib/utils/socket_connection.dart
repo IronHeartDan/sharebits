@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:socket_io_client/socket_io_client.dart';
 
 class BitsSignalling {
@@ -11,12 +9,9 @@ class BitsSignalling {
 
   void setSocket(Socket socket) => this.socket = socket;
 
-
   factory BitsSignalling() {
     return _bitsSignalling;
   }
 
-  BitsSignalling._internal(){
-    log("INIT");
-  }
+  BitsSignalling._internal();
 }

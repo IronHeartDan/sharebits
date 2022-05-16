@@ -46,7 +46,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
     var localContacts = box.get("contacts");
 
     if (localContacts != null) {
-      return localContacts;
+      return List<BitsContact>.from(localContacts);
     }
 
     List<Contact> contacts =

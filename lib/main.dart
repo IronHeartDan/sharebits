@@ -31,15 +31,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Hive.initFlutter();
-  Hive.registerAdapter(BitsContactAdapter());
-  await Hive.openBox("contacts");
-
   await Firebase.initializeApp();
 
   NotificationAPI.initNotifications();
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     print('Got a message whilst in the foreground!');
     print('Message data: ${message.data}');
@@ -48,6 +45,12 @@ void main() async {
       print('Message also contained a notification: ${message.notification}');
     }
   });
+
+
+  await Hive.initFlutter();
+  Hive.registerAdapter(BitsContactAdapter());
+  await Hive.openBox("contacts");
+
 
   runApp(const MyApp());
 }

@@ -456,9 +456,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? () async {
                     if (callState == 1) {
                       // end call
-                      context
-                          .read<CallState>()
-                          .changeCallState(0);
+                      context.read<CallState>().changeCallState(0);
                     } else if (callState == 2) {
                       await bitsConnection.peerConnection.close();
                       initPeer();

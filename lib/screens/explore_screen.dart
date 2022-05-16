@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:contacts_service/contacts_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:hive/hive.dart';
@@ -13,6 +14,61 @@ import 'package:sharebits/utils/socket_connection.dart';
 import 'package:sharebits/webrtc/rtc_connection.dart';
 
 import '../utils/constants.dart';
+
+Future<List<BitsContact>> _syncContacts(List<Contact> contacts) async {
+  Map<String, BitsContact> filteredContacts = {};
+  var phoneNumbers = [];
+
+  for (var contact in contacts) {
+    if (contact.phones != null && contact.phones!.isNotEmpty) {
+      for (var phone in contact.phones!) {
+        if (phone.value != null) {
+          var number = phone.value!.replaceAll(" ", "");
+          number = number.replaceAll("-", "");
+          if (number.startsWith("0")) {
+            number = number.substring(1);
+          }
+          if (number.startsWith("+91") && number[3] == "0") {
+            number = number.substring(0, 2) + number.substring(4);
+          }
+          if (number.startsWith("+91") && number.length == 13) {
+            phoneNumbers.add({"phoneNumber": number});
+            filteredContacts[number] = BitsContact(
+                contact.displayName != null
+                    ? contact.displayName!
+                    : number.substring(3),
+                number.substring(3));
+          } else {
+            number = "+91$number";
+            if (number.length == 13) {
+              phoneNumbers.add({"phoneNumber": number});
+              filteredContacts[number] = BitsContact(
+                  contact.displayName != null
+                      ? contact.displayName!
+                      : number.substring(3),
+                  number.substring(3));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  var results = await http.post(Uri.parse("$socketServer/users"),
+      headers: {
+        "content-type": "application/json",
+      },
+      body: jsonEncode({"phoneNumbers": phoneNumbers}));
+  var data = await jsonDecode(results.body) as List<dynamic>;
+
+  data.map((element) {
+    filteredContacts[element]!.isAccount = true;
+  }).toList();
+
+  var processed = filteredContacts.values.toList();
+
+  return processed;
+}
 
 class ExplorerScreen extends StatefulWidget {
   const ExplorerScreen({Key? key}) : super(key: key);
@@ -34,81 +90,27 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
   @override
   void initState() {
     super.initState();
-    _pageController.addListener(() {
-      setState(() {});
-    });
-    _future = _getContacts();
+    _future = _getContacts(false);
   }
 
-  Future<List<BitsContact>> _getContacts() async {
+  Future<List<BitsContact>> _getContacts(bool refresh) async {
     box = Hive.box("contacts");
-
     var localContacts = box.get("contacts");
 
-    if (localContacts != null) {
+    if (!refresh && localContacts != null) {
       return List<BitsContact>.from(localContacts);
     }
 
     List<Contact> contacts =
         await ContactsService.getContacts(withThumbnails: false);
 
-    Map<String, BitsContact> filteredContacts = {};
-    var phoneNumbers = [];
-
-    for (var contact in contacts) {
-      if (contact.phones != null && contact.phones!.isNotEmpty) {
-        for (var phone in contact.phones!) {
-          if (phone.value != null) {
-            var number = phone.value!.replaceAll(" ", "");
-            number = number.replaceAll("-", "");
-            if (number.startsWith("0")) {
-              number = number.substring(1);
-            }
-            if (number.startsWith("+91") && number[3] == "0") {
-              number = number.substring(0, 2) + number.substring(4);
-            }
-            if (number.startsWith("+91") && number.length == 13) {
-              phoneNumbers.add({"phoneNumber": number});
-              filteredContacts[number] = BitsContact(
-                  contact.displayName != null
-                      ? contact.displayName!
-                      : number.substring(3),
-                  number.substring(3));
-            } else {
-              number = "+91$number";
-              if (number.length == 13) {
-                phoneNumbers.add({"phoneNumber": number});
-                filteredContacts[number] = BitsContact(
-                    contact.displayName != null
-                        ? contact.displayName!
-                        : number.substring(3),
-                    number.substring(3));
-              }
-            }
-          }
-        }
-      }
-    }
-
-    var results = await http.post(Uri.parse("$socketServer/users"),
-        headers: {
-          "content-type": "application/json",
-        },
-        body: jsonEncode({"phoneNumbers": phoneNumbers}));
-    var data = await jsonDecode(results.body) as List<dynamic>;
-
-    data.map((element) {
-      filteredContacts[element]!.isAccount = true;
-    }).toList();
-
-    var processed = filteredContacts.values.toList();
-    box.put("contacts", processed);
-
-    return processed;
+    var bitsContacts = await compute(_syncContacts, contacts);
+    box.put("contacts", bitsContacts);
+    return bitsContacts;
   }
 
   Future<void> _refresh() async {
-    _future = _getContacts();
+    _future = _getContacts(true);
     await _future;
     setState(() {});
   }

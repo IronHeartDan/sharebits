@@ -1,6 +1,10 @@
+import android.provider.Settings;
+
 AudioAttributes audioAttributes =
                         new AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                                 .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).build();
+
+
                 Uri uri = Settings.System.DEFAULT_RINGTONE_URI;
                 notificationChannel.setSound(uri, audioAttributes);
 

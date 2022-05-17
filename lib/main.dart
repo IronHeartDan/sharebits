@@ -46,11 +46,9 @@ void main() async {
     }
   });
 
-
   await Hive.initFlutter();
   Hive.registerAdapter(BitsContactAdapter());
   await Hive.openBox("contacts");
-
 
   runApp(const MyApp());
 }

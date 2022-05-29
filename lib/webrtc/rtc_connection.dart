@@ -37,6 +37,7 @@ class BitsConnection {
 
   late RTCPeerConnection peerConnection;
   late RTCSessionDescription localOffer;
+  String? connectedPeer;
 
   static final BitsConnection _bitsConnection = BitsConnection.internal();
 

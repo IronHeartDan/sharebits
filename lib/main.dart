@@ -73,7 +73,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ScreenUtilInit(
         designSize: const Size(1080, 1920),
-        builder: (context) {
+        builder: (context,_) {
           return MultiProvider(
             providers: [ChangeNotifierProvider(create: (_) => CallState())],
             child: MaterialApp(

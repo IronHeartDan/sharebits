@@ -3,8 +3,37 @@ import 'dart:developer';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:sharebits/utils/constants.dart';
 import 'package:sharebits/utils/socket_connection.dart';
 import 'package:sharebits/webrtc/rtc_connection.dart';
+import 'package:socket_io_client/socket_io_client.dart';
+
+void onDidReceiveBackgroundNotificationResponse(response) async {
+  var notificationResponse = response as NotificationResponse;
+
+  log("Background CLick");
+
+  var action = notificationResponse.actionId;
+  var payload = jsonDecode(notificationResponse.payload!);
+
+  if (action == "DECLINE") {
+    var socket = io(
+        socketServer,
+        OptionBuilder().setTransports(['websocket']).setExtraHeaders(
+            {"type": 0}).build());
+
+    socket.onerror((err) => log(err));
+
+    socket.onConnect((_) {
+      log("Background Socket Connected");
+      socket.emit("callDeclined", payload["from"]);
+      log("Sent CallDeclined In BG");
+      socket.disconnect();
+      log("Background Socket Disconnected");
+    });
+  }
+  log("ENDED");
+}
 
 class NotificationAPI {
   static final _notifications = FlutterLocalNotificationsPlugin();
@@ -49,46 +78,22 @@ class NotificationAPI {
       case "DECLINE":
         socket.emit("callDeclined", payload["from"]);
         break;
-
       case "ACCEPT":
-        var bitsConnection = BitsConnection().peerConnection;
-        await bitsConnection.setRemoteDescription(offer);
-        var remoteOffer = await bitsConnection.createAnswer();
+        var bitsConnection = BitsConnection();
+        bitsConnection.connectedPeer = payload["from"];
+        await bitsConnection.peerConnection.setRemoteDescription(offer);
+        var remoteOffer = await bitsConnection.peerConnection.createAnswer();
         var answer = {"to": payload["from"], "offer": remoteOffer.toMap()};
         socket.emit("callAccepted", jsonEncode(answer));
-        bitsConnection.onIceCandidate = (ice) {
+        bitsConnection.peerConnection.onIceCandidate = (ice) {
           var data = {"to": payload["from"], "ice": ice.toMap()};
           socket.emit("iceCandidate", jsonEncode(data));
         };
-        bitsConnection.setLocalDescription(remoteOffer);
+        bitsConnection.peerConnection.setLocalDescription(remoteOffer);
         break;
     }
   }
 
-  static void onDidReceiveBackgroundNotificationResponse(response) {
-    var notificationResponse = response as NotificationResponse;
-
-    log("Background CLick");
-
-    // var action = notificationResponse.actionId;
-    // var payload = jsonDecode(notificationResponse.payload!);
-    //
-    // await Firebase.initializeApp();
-    // var socket = io(
-    //     "http://10.0.2.2:3000",
-    //     OptionBuilder().setTransports(['websocket']).setExtraHeaders({
-    //       "type": 0,
-    //       "phone": FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3)
-    //     }).build());
-    //
-    // socket.onerror((err) => log(err));
-    //
-    // socket.onConnect((_) {
-    //   log("Background Socket Connected");
-    //
-    //   socket.disconnect();
-    // });
-  }
 
   static Future showNotification(
       {int id = 0, String? title, String? body, String? payload}) async {
@@ -113,8 +118,10 @@ class NotificationAPI {
             actions: [
               AndroidNotificationAction("ACCEPT", "Accept",
                   showsUserInterface: true),
-              AndroidNotificationAction("DECLINE", "Decline",
-                  showsUserInterface: true),
+              AndroidNotificationAction(
+                "DECLINE",
+                "Decline",
+              ),
             ],
             // timeoutAfter: 6000
           ),

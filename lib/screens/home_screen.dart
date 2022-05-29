@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -94,13 +95,58 @@ class _HomeScreenState extends State<HomeScreen> {
         }).build()));
     socket = BitsSignalling().getSocket();
     socket.onConnect((_) => {log("Socket Connected")});
-    socket.on("call", (data) {
+    socket.on("call", (data) async{
       if (data != null) {
         var callRequestInfo = jsonDecode(data);
-        NotificationAPI.showNotification(
-            title: "Incoming Video Call",
-            body: callRequestInfo["from"],
-            payload: data);
+
+        // NotificationAPI.showNotification(
+        //     title: "Incoming Video Call",
+        //     body: callRequestInfo["from"],
+        //     payload: data);
+
+        var params = <String, dynamic>{
+          'id': callRequestInfo["from"],
+          'nameCaller': callRequestInfo["from"],
+          'appName': 'sharebits',
+          'avatar': 'https://i.pravatar.cc/100',
+          'handle': callRequestInfo["from"],
+          'type': 1,
+          'textAccept': 'Accept',
+          'textDecline': 'Decline',
+          'textMissedCall': 'Missed call',
+          'textCallback': 'Call back',
+          'duration': 30000,
+          'extra': callRequestInfo,
+          'headers': <String, dynamic>{'apiKey': 'Abc@123!', 'platform': 'flutter'},
+          'android': <String, dynamic>{
+            'isCustomNotification': false,
+            'isShowLogo': false,
+            'isShowCallback': false,
+            'isShowMissedCallNotification': true,
+            'ringtonePath': 'system_ringtone_default',
+            'backgroundColor': '#0955fa',
+            'backgroundUrl': 'https://i.pravatar.cc/500',
+            'actionColor': '#4CAF50'
+          },
+          'ios': <String, dynamic>{
+            'iconName': 'CallKitLogo',
+            'handleType': 'generic',
+            'supportsVideo': true,
+            'maximumCallGroups': 2,
+            'maximumCallsPerCallGroup': 1,
+            'audioSessionMode': 'default',
+            'audioSessionActive': true,
+            'audioSessionPreferredSampleRate': 44100.0,
+            'audioSessionPreferredIOBufferDuration': 0.005,
+            'supportsDTMF': true,
+            'supportsHolding': false,
+            'supportsGrouping': false,
+            'supportsUngrouping': false,
+            'ringtonePath': 'system_ringtone_default'
+          }
+        };
+        await FlutterCallkitIncoming.showCallkitIncoming(params);
+
       } else {
         log("RECEIVED A NULL CALL");
       }
@@ -113,6 +159,8 @@ class _HomeScreenState extends State<HomeScreen> {
       var info = jsonDecode(data);
       var remoteOffer =
           RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);
+
+      bitsConnection.connectedPeer = info["from"];
 
       bitsConnection.peerConnection.onIceCandidate = (ice) {
         var data = {"to": info["from"], "ice": ice.toMap()};
@@ -148,6 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
       };
       var stream = await _getStream(mediaConstraints);
 
+
       var devices = await navigator.mediaDevices.enumerateDevices();
       for (var element in devices) {
         if (element.kind != null) {
@@ -176,10 +225,12 @@ class _HomeScreenState extends State<HomeScreen> {
       bitsConnection.peerConnection.onConnectionState = (event) {
         switch (event) {
           case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
+            bitsConnection.connectedPeer = null;
             context.read<CallState>().changeCallState(0);
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
           case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+            bitsConnection.connectedPeer = null;
             context.read<CallState>().changeCallState(0);
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateNew:
@@ -328,8 +379,9 @@ class _HomeScreenState extends State<HomeScreen> {
               top: AppBar().preferredSize.height,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 200),
-                opacity: 1,
-                // inCall || isCalling ? buttonsState.toDouble() : 0,
+                opacity: callState == 1 || callState == 2
+                    ? buttonsState.toDouble()
+                    : 0,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -456,8 +508,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? () async {
                     if (callState == 1) {
                       // end call
+                      socket.emit("cancelCall", bitsConnection.connectedPeer);
                       context.read<CallState>().changeCallState(0);
                     } else if (callState == 2) {
+                      bitsConnection.connectedPeer = null;
                       await bitsConnection.peerConnection.close();
                       initPeer();
                     }

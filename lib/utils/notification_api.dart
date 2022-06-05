@@ -3,10 +3,10 @@ import 'dart:developer';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:http/http.dart' as http;
 import 'package:sharebits/utils/constants.dart';
 import 'package:sharebits/utils/socket_connection.dart';
 import 'package:sharebits/webrtc/rtc_connection.dart';
-import 'package:socket_io_client/socket_io_client.dart';
 
 void onDidReceiveBackgroundNotificationResponse(response) async {
   var notificationResponse = response as NotificationResponse;
@@ -17,22 +17,12 @@ void onDidReceiveBackgroundNotificationResponse(response) async {
   var payload = jsonDecode(notificationResponse.payload!);
 
   if (action == "DECLINE") {
-    var socket = io(
-        socketServer,
-        OptionBuilder().setTransports(['websocket']).setExtraHeaders(
-            {"type": 0}).build());
-
-    socket.onerror((err) => log(err));
-
-    socket.onConnect((_) {
-      log("Background Socket Connected");
-      socket.emit("callDeclined", payload["from"]);
-      log("Sent CallDeclined In BG");
-      socket.disconnect();
-      log("Background Socket Disconnected");
-    });
+    http.post(Uri.parse("$bitsServer/rejectCall"),
+        headers: {
+          "content-type": "application/json",
+        },
+        body: jsonEncode({"who": payload["from"]}));
   }
-  log("ENDED");
 }
 
 class NotificationAPI {
@@ -93,7 +83,6 @@ class NotificationAPI {
         break;
     }
   }
-
 
   static Future showNotification(
       {int id = 0, String? title, String? body, String? payload}) async {

@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
-class CallState extends ChangeNotifier {
+class BitsCallState extends ChangeNotifier {
   // 0 For ideal
   // 1 For calling
   // 2 For in call

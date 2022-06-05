@@ -88,26 +88,20 @@ class _HomeScreenState extends State<HomeScreen> {
     setupToken();
     BitsSignalling().setSocket(IO.io(
         // "http://10.0.2.2:3000",
-        socketServer,
+        bitsServer,
         IO.OptionBuilder().setTransports(['websocket']).setExtraHeaders({
           "type": 1,
           "phone": FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3)
         }).build()));
     socket = BitsSignalling().getSocket();
     socket.onConnect((_) => {log("Socket Connected")});
-    socket.on("call", (data) async{
+    socket.on("call", (data) async {
       if (data != null) {
         var callRequestInfo = jsonDecode(data);
-
-        // NotificationAPI.showNotification(
-        //     title: "Incoming Video Call",
-        //     body: callRequestInfo["from"],
-        //     payload: data);
-
         var params = <String, dynamic>{
           'id': callRequestInfo["from"],
-          'nameCaller': callRequestInfo["from"],
-          'appName': 'sharebits',
+          'nameCaller': "Incoming Video Call ${callRequestInfo['from']}",
+          'appName': 'Sharebits',
           'avatar': 'https://i.pravatar.cc/100',
           'handle': callRequestInfo["from"],
           'type': 1,
@@ -117,7 +111,6 @@ class _HomeScreenState extends State<HomeScreen> {
           'textCallback': 'Call back',
           'duration': 30000,
           'extra': callRequestInfo,
-          'headers': <String, dynamic>{'apiKey': 'Abc@123!', 'platform': 'flutter'},
           'android': <String, dynamic>{
             'isCustomNotification': false,
             'isShowLogo': false,
@@ -139,28 +132,64 @@ class _HomeScreenState extends State<HomeScreen> {
             'audioSessionPreferredSampleRate': 44100.0,
             'audioSessionPreferredIOBufferDuration': 0.005,
             'supportsDTMF': true,
-            'supportsHolding': false,
+            'supportsHolding': true,
             'supportsGrouping': false,
             'supportsUngrouping': false,
             'ringtonePath': 'system_ringtone_default'
           }
         };
-        await FlutterCallkitIncoming.showCallkitIncoming(params);
+        FlutterCallkitIncoming.onEvent.listen((event) async {
+          switch (event!.name) {
+            case CallEvent.ACTION_CALL_ACCEPT:
+              socket.emit("callAccepted", callRequestInfo["from"]);
+              break;
+            case CallEvent.ACTION_CALL_DECLINE:
+              socket.emit("callDeclined", callRequestInfo["from"]);
+              break;
+          }
+        });
 
+        await FlutterCallkitIncoming.showCallkitIncoming(params);
       } else {
         log("RECEIVED A NULL CALL");
       }
     });
     socket.on("cancelCall", (data) => {NotificationAPI.hideNotification()});
     socket.on("callDeclined", (_) {
-      context.read<CallState>().changeCallState(0);
+      context.read<BitsCallState>().changeCallState(0);
     });
-    socket.on("callAccepted", (data) async {
+    socket.on("callAccepted", (_) async {
+      await bitsConnection.createOffer();
+      var localOffer = bitsConnection.localOffer;
+      var callOffer = {
+        "to": bitsConnection.connectedPeer,
+        "offer": localOffer.toMap()
+      };
+
+      socket.emit("callOffer", jsonEncode(callOffer));
+    });
+
+    socket.on("callOffer", (data) async {
       var info = jsonDecode(data);
-      var remoteOffer =
+      var offer =
           RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);
 
       bitsConnection.connectedPeer = info["from"];
+      await bitsConnection.peerConnection.setRemoteDescription(offer);
+      var remoteOffer = await bitsConnection.peerConnection.createAnswer();
+      var answer = {"to": info["from"], "offer": remoteOffer.toMap()};
+      socket.emit("answerOffer", jsonEncode(answer));
+      bitsConnection.peerConnection.onIceCandidate = (ice) {
+        var data = {"to": info["from"], "ice": ice.toMap()};
+        socket.emit("iceCandidate", jsonEncode(data));
+      };
+      bitsConnection.peerConnection.setLocalDescription(remoteOffer);
+    });
+
+    socket.on("answerOffer", (data) async {
+      var info = jsonDecode(data);
+      var remoteOffer =
+          RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);
 
       bitsConnection.peerConnection.onIceCandidate = (ice) {
         var data = {"to": info["from"], "ice": ice.toMap()};
@@ -180,6 +209,19 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     initPeer();
+    getCurrentCall();
+  }
+
+  getCurrentCall() async {
+    //check current call from pushkit if possible
+    var calls = await FlutterCallkitIncoming.activeCalls();
+    if (calls is List) {
+      if (calls.isNotEmpty) {
+        print('DATA: ${calls[0]["id"]}');
+        var from = calls[0]["id"];
+        socket.emit("callAccepted", from);
+      }
+    }
   }
 
   void initPeer() async {
@@ -195,7 +237,6 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       };
       var stream = await _getStream(mediaConstraints);
-
 
       var devices = await navigator.mediaDevices.enumerateDevices();
       for (var element in devices) {
@@ -222,22 +263,24 @@ class _HomeScreenState extends State<HomeScreen> {
         _remoteRenderer.srcObject = event.streams[0];
       };
 
-      bitsConnection.peerConnection.onConnectionState = (event) {
+      bitsConnection.peerConnection.onConnectionState = (event) async {
         switch (event) {
           case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
             bitsConnection.connectedPeer = null;
-            context.read<CallState>().changeCallState(0);
+            context.read<BitsCallState>().changeCallState(0);
+            await FlutterCallkitIncoming.endAllCalls();
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
           case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
             bitsConnection.connectedPeer = null;
-            context.read<CallState>().changeCallState(0);
+            context.read<BitsCallState>().changeCallState(0);
+            await FlutterCallkitIncoming.endAllCalls();
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateNew:
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
           case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
-            context.read<CallState>().changeCallState(2);
+            context.read<BitsCallState>().changeCallState(2);
             break;
         }
       };
@@ -268,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    callState = context.watch<CallState>().callState;
+    callState = context.watch<BitsCallState>().callState;
     var mediaQuery = MediaQuery.of(context);
     var size = mediaQuery.size;
     var statusBarHeight = mediaQuery.padding.top;
@@ -509,10 +552,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (callState == 1) {
                       // end call
                       socket.emit("cancelCall", bitsConnection.connectedPeer);
-                      context.read<CallState>().changeCallState(0);
+                      context.read<BitsCallState>().changeCallState(0);
                     } else if (callState == 2) {
                       bitsConnection.connectedPeer = null;
                       await bitsConnection.peerConnection.close();
+                      await FlutterCallkitIncoming.endAllCalls();
                       initPeer();
                     }
                   }

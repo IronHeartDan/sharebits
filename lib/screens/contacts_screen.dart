@@ -52,7 +52,7 @@ Future<List<BitsContact>> _syncContacts(List<Contact> contacts) async {
     }
   }
 
-  var results = await http.post(Uri.parse("$socketServer/users"),
+  var results = await http.post(Uri.parse("$bitsServer/users"),
       headers: {
         "content-type": "application/json",
       },
@@ -142,17 +142,10 @@ class _ContactsScreenState extends State<ContactsScreen>
                       title: Text(contact.name),
                       trailing: InkWell(
                         onTap: () async {
-                          await bitsConnection.createOffer();
-                          var localOffer = bitsConnection.localOffer;
-                          var callRequestInfo = {
-                            "to": contact.phone,
-                            "offer": localOffer.toMap()
-                          };
-
                           bitsSignalling.socket.emitWithAck(
-                              "call", jsonEncode(callRequestInfo), ack: (ack) {
-                            context.read<CallState>().changeCallState(1);
-
+                              "call", contact.phone, ack: (ack) {
+                            context.read<BitsCallState>().changeCallState(1);
+                            bitsConnection.connectedPeer = contact.phone;
                             Navigator.of(context).pop();
                           });
                         },

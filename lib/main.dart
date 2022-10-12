@@ -6,7 +6,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
@@ -15,7 +14,6 @@ import 'package:sharebits/screens/authentication_screen.dart';
 import 'package:sharebits/screens/home_screen.dart';
 import 'package:sharebits/states/call_state.dart';
 import 'package:sharebits/utils/constants.dart';
-import 'package:sharebits/utils/notification_api.dart';
 
 import 'models/contact.dart';
 
@@ -81,9 +79,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp();
-
-  NotificationAPI.initNotifications();
-
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {

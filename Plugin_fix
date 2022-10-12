@@ -11,3 +11,13 @@ AudioAttributes audioAttributes =
 
 
 on line 1074
+
+
+fun getDataActiveCallsForFlutter(context: Context?): ArrayList<Data> {
+    val json = getString(context, "ACTIVE_CALLS", "[]")
+    return Utils.getGsonInstance().fromJson(json, object: TypeToken<ArrayList< Map<String, Any?>>>() {}.type)
+}
+
+  "activeCalls" -> {
+      result.success(getDataActiveCallsForFlutter(context))
+  }

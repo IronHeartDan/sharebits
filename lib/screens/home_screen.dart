@@ -12,7 +12,6 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:sharebits/states/call_state.dart';
-import 'package:sharebits/utils/notification_api.dart';
 import 'package:sharebits/utils/socket_connection.dart';
 import 'package:sharebits/webrtc/rtc_connection.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -87,7 +86,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     setupToken();
     BitsSignalling().setSocket(IO.io(
-        // "http://10.0.2.2:3000",
         bitsServer,
         IO.OptionBuilder().setTransports(['websocket']).setExtraHeaders({
           "type": 1,
@@ -154,22 +152,23 @@ class _HomeScreenState extends State<HomeScreen> {
         log("RECEIVED A NULL CALL");
       }
     });
-    socket.on("cancelCall", (data) => {NotificationAPI.hideNotification()});
+    socket.on("cancelCall", (data) => {});
     socket.on("callDeclined", (_) {
       context.read<BitsCallState>().changeCallState(0);
     });
     socket.on("callAccepted", (_) async {
+      log(">>>>>>>>>>>>>>>>>>>>>>>>> Call Accepted <<<<<<<<<<<<<<<");
       await bitsConnection.createOffer();
-      var localOffer = bitsConnection.localOffer;
       var callOffer = {
         "to": bitsConnection.connectedPeer,
-        "offer": localOffer.toMap()
+        "offer": bitsConnection.localOffer.toMap()
       };
 
       socket.emit("callOffer", jsonEncode(callOffer));
     });
 
     socket.on("callOffer", (data) async {
+      log(">>>>>>>>>>>>>>>>>>>>>>>>> Call Offer Received <<<<<<<<<<<<<<<");
       var info = jsonDecode(data);
       var offer =
           RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);
@@ -178,15 +177,16 @@ class _HomeScreenState extends State<HomeScreen> {
       await bitsConnection.peerConnection.setRemoteDescription(offer);
       var remoteOffer = await bitsConnection.peerConnection.createAnswer();
       var answer = {"to": info["from"], "offer": remoteOffer.toMap()};
-      socket.emit("answerOffer", jsonEncode(answer));
       bitsConnection.peerConnection.onIceCandidate = (ice) {
         var data = {"to": info["from"], "ice": ice.toMap()};
         socket.emit("iceCandidate", jsonEncode(data));
       };
-      bitsConnection.peerConnection.setLocalDescription(remoteOffer);
+      await bitsConnection.peerConnection.setLocalDescription(remoteOffer);
+      socket.emit("answerOffer", jsonEncode(answer));
     });
 
     socket.on("answerOffer", (data) async {
+      log(">>>>>>>>>>>>>>>>>>>>>>>>> Answer Offer Received <<<<<<<<<<<<<<<");
       var info = jsonDecode(data);
       var remoteOffer =
           RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);

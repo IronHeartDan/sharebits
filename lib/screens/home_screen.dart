@@ -81,136 +81,136 @@ class _HomeScreenState extends State<HomeScreen> {
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   late BitsConnection bitsConnection;
 
-  @override
-  void initState() {
-    super.initState();
-    setupToken();
-    BitsSignalling().setSocket(IO.io(
-        bitsServer,
-        IO.OptionBuilder().setTransports(['websocket']).setExtraHeaders({
-          "type": 1,
-          "phone": FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3)
-        }).build()));
-    socket = BitsSignalling().getSocket();
-    socket.onConnect((_) => {log("Socket Connected")});
-    socket.on("call", (data) async {
-      if (data != null) {
-        var callRequestInfo = jsonDecode(data);
-        var params = <String, dynamic>{
-          'id': callRequestInfo["from"],
-          'nameCaller': "Incoming Video Call ${callRequestInfo['from']}",
-          'appName': 'Sharebits',
-          'avatar': 'https://i.pravatar.cc/100',
-          'handle': callRequestInfo["from"],
-          'type': 1,
-          'textAccept': 'Accept',
-          'textDecline': 'Decline',
-          'textMissedCall': 'Missed call',
-          'textCallback': 'Call back',
-          'duration': 30000,
-          'extra': callRequestInfo,
-          'android': <String, dynamic>{
-            'isCustomNotification': false,
-            'isShowLogo': false,
-            'isShowCallback': false,
-            'isShowMissedCallNotification': true,
-            'ringtonePath': 'system_ringtone_default',
-            'backgroundColor': '#0955fa',
-            'backgroundUrl': 'https://i.pravatar.cc/500',
-            'actionColor': '#4CAF50'
-          },
-          'ios': <String, dynamic>{
-            'iconName': 'CallKitLogo',
-            'handleType': 'generic',
-            'supportsVideo': true,
-            'maximumCallGroups': 2,
-            'maximumCallsPerCallGroup': 1,
-            'audioSessionMode': 'default',
-            'audioSessionActive': true,
-            'audioSessionPreferredSampleRate': 44100.0,
-            'audioSessionPreferredIOBufferDuration': 0.005,
-            'supportsDTMF': true,
-            'supportsHolding': true,
-            'supportsGrouping': false,
-            'supportsUngrouping': false,
-            'ringtonePath': 'system_ringtone_default'
-          }
-        };
-        FlutterCallkitIncoming.onEvent.listen((event) async {
-          switch (event!.name) {
-            case CallEvent.ACTION_CALL_ACCEPT:
-              socket.emit("callAccepted", callRequestInfo["from"]);
-              break;
-            case CallEvent.ACTION_CALL_DECLINE:
-              socket.emit("callDeclined", callRequestInfo["from"]);
-              break;
-          }
-        });
-
-        await FlutterCallkitIncoming.showCallkitIncoming(params);
-      } else {
-        log("RECEIVED A NULL CALL");
-      }
-    });
-    socket.on("cancelCall", (data) => {});
-    socket.on("callDeclined", (_) {
-      context.read<BitsCallState>().changeCallState(0);
-    });
-    socket.on("callAccepted", (_) async {
-      log(">>>>>>>>>>>>>>>>>>>>>>>>> Call Accepted <<<<<<<<<<<<<<<");
-      await bitsConnection.createOffer();
-      var callOffer = {
-        "to": bitsConnection.connectedPeer,
-        "offer": bitsConnection.localOffer.toMap()
-      };
-
-      socket.emit("callOffer", jsonEncode(callOffer));
-    });
-
-    socket.on("callOffer", (data) async {
-      log(">>>>>>>>>>>>>>>>>>>>>>>>> Call Offer Received <<<<<<<<<<<<<<<");
-      var info = jsonDecode(data);
-      var offer =
-          RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);
-
-      bitsConnection.connectedPeer = info["from"];
-      await bitsConnection.peerConnection.setRemoteDescription(offer);
-      var remoteOffer = await bitsConnection.peerConnection.createAnswer();
-      var answer = {"to": info["from"], "offer": remoteOffer.toMap()};
-      bitsConnection.peerConnection.onIceCandidate = (ice) {
-        var data = {"to": info["from"], "ice": ice.toMap()};
-        socket.emit("iceCandidate", jsonEncode(data));
-      };
-      await bitsConnection.peerConnection.setLocalDescription(remoteOffer);
-      socket.emit("answerOffer", jsonEncode(answer));
-    });
-
-    socket.on("answerOffer", (data) async {
-      log(">>>>>>>>>>>>>>>>>>>>>>>>> Answer Offer Received <<<<<<<<<<<<<<<");
-      var info = jsonDecode(data);
-      var remoteOffer =
-          RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);
-
-      bitsConnection.peerConnection.onIceCandidate = (ice) {
-        var data = {"to": info["from"], "ice": ice.toMap()};
-        socket.emit("iceCandidate", jsonEncode(data));
-      };
-
-      await bitsConnection.peerConnection
-          .setLocalDescription(bitsConnection.localOffer);
-      await bitsConnection.peerConnection.setRemoteDescription(remoteOffer);
-    });
-
-    socket.on("iceCandidate", (data) {
-      var info = jsonDecode(data);
-      var ice = RTCIceCandidate(info["ice"]["candidate"], info["ice"]["sdpMid"],
-          info["ice"]["sdpMLineIndex"]);
-      bitsConnection.peerConnection.addCandidate(ice);
-    });
-
-    initPeer();
-    getCurrentCall();
-  }
+  // @override
+  // void initState() {
+  //   super.initState();
+  //   setupToken();
+  //   BitsSignalling().setSocket(IO.io(
+  //       bitsServer,
+  //       IO.OptionBuilder().setTransports(['websocket']).setExtraHeaders({
+  //         "type": 1,
+  //         "phone": FirebaseAuth.instance.currentUser!.phoneNumber!.substring(3)
+  //       }).build()));
+  //   socket = BitsSignalling().getSocket();
+  //   socket.onConnect((_) => {log("Socket Connected")});
+  //   socket.on("call", (data) async {
+  //     if (data != null) {
+  //       var callRequestInfo = jsonDecode(data);
+  //       var params = <String, dynamic>{
+  //         'id': callRequestInfo["from"],
+  //         'nameCaller': "Incoming Video Call ${callRequestInfo['from']}",
+  //         'appName': 'Sharebits',
+  //         'avatar': 'https://i.pravatar.cc/100',
+  //         'handle': callRequestInfo["from"],
+  //         'type': 1,
+  //         'textAccept': 'Accept',
+  //         'textDecline': 'Decline',
+  //         'textMissedCall': 'Missed call',
+  //         'textCallback': 'Call back',
+  //         'duration': 30000,
+  //         'extra': callRequestInfo,
+  //         'android': <String, dynamic>{
+  //           'isCustomNotification': false,
+  //           'isShowLogo': false,
+  //           'isShowCallback': false,
+  //           'isShowMissedCallNotification': true,
+  //           'ringtonePath': 'system_ringtone_default',
+  //           'backgroundColor': '#0955fa',
+  //           'backgroundUrl': 'https://i.pravatar.cc/500',
+  //           'actionColor': '#4CAF50'
+  //         },
+  //         'ios': <String, dynamic>{
+  //           'iconName': 'CallKitLogo',
+  //           'handleType': 'generic',
+  //           'supportsVideo': true,
+  //           'maximumCallGroups': 2,
+  //           'maximumCallsPerCallGroup': 1,
+  //           'audioSessionMode': 'default',
+  //           'audioSessionActive': true,
+  //           'audioSessionPreferredSampleRate': 44100.0,
+  //           'audioSessionPreferredIOBufferDuration': 0.005,
+  //           'supportsDTMF': true,
+  //           'supportsHolding': true,
+  //           'supportsGrouping': false,
+  //           'supportsUngrouping': false,
+  //           'ringtonePath': 'system_ringtone_default'
+  //         }
+  //       };
+  //       FlutterCallkitIncoming.onEvent.listen((event) async {
+  //         switch (event!.name) {
+  //           case CallEvent.ACTION_CALL_ACCEPT:
+  //             socket.emit("callAccepted", callRequestInfo["from"]);
+  //             break;
+  //           case CallEvent.ACTION_CALL_DECLINE:
+  //             socket.emit("callDeclined", callRequestInfo["from"]);
+  //             break;
+  //         }
+  //       });
+  //
+  //       await FlutterCallkitIncoming.showCallkitIncoming(params);
+  //     } else {
+  //       log("RECEIVED A NULL CALL");
+  //     }
+  //   });
+  //   socket.on("cancelCall", (data) => {});
+  //   socket.on("callDeclined", (_) {
+  //     context.read<BitsCallState>().changeCallState(0);
+  //   });
+  //   socket.on("callAccepted", (_) async {
+  //     log(">>>>>>>>>>>>>>>>>>>>>>>>> Call Accepted <<<<<<<<<<<<<<<");
+  //     await bitsConnection.createOffer();
+  //     var callOffer = {
+  //       "to": bitsConnection.connectedPeer,
+  //       "offer": bitsConnection.localOffer.toMap()
+  //     };
+  //
+  //     socket.emit("callOffer", jsonEncode(callOffer));
+  //   });
+  //
+  //   socket.on("callOffer", (data) async {
+  //     log(">>>>>>>>>>>>>>>>>>>>>>>>> Call Offer Received <<<<<<<<<<<<<<<");
+  //     var info = jsonDecode(data);
+  //     var offer =
+  //         RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);
+  //
+  //     bitsConnection.connectedPeer = info["from"];
+  //     await bitsConnection.peerConnection.setRemoteDescription(offer);
+  //     var remoteOffer = await bitsConnection.peerConnection.createAnswer();
+  //     var answer = {"to": info["from"], "offer": remoteOffer.toMap()};
+  //     bitsConnection.peerConnection.onIceCandidate = (ice) {
+  //       var data = {"to": info["from"], "ice": ice.toMap()};
+  //       socket.emit("iceCandidate", jsonEncode(data));
+  //     };
+  //     await bitsConnection.peerConnection.setLocalDescription(remoteOffer);
+  //     socket.emit("answerOffer", jsonEncode(answer));
+  //   });
+  //
+  //   socket.on("answerOffer", (data) async {
+  //     log(">>>>>>>>>>>>>>>>>>>>>>>>> Answer Offer Received <<<<<<<<<<<<<<<");
+  //     var info = jsonDecode(data);
+  //     var remoteOffer =
+  //         RTCSessionDescription(info["offer"]["sdp"], info["offer"]["type"]);
+  //
+  //     bitsConnection.peerConnection.onIceCandidate = (ice) {
+  //       var data = {"to": info["from"], "ice": ice.toMap()};
+  //       socket.emit("iceCandidate", jsonEncode(data));
+  //     };
+  //
+  //     await bitsConnection.peerConnection
+  //         .setLocalDescription(bitsConnection.localOffer);
+  //     await bitsConnection.peerConnection.setRemoteDescription(remoteOffer);
+  //   });
+  //
+  //   socket.on("iceCandidate", (data) {
+  //     var info = jsonDecode(data);
+  //     var ice = RTCIceCandidate(info["ice"]["candidate"], info["ice"]["sdpMid"],
+  //         info["ice"]["sdpMLineIndex"]);
+  //     bitsConnection.peerConnection.addCandidate(ice);
+  //   });
+  //
+  //   initPeer();
+  //   getCurrentCall();
+  // }
 
   getCurrentCall() async {
     //check current call from pushkit if possible
